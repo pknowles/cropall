@@ -36,24 +36,35 @@ allow_fractional_size = False
 
 import os, sys
 print sys.version
+
+print "Importing libraries..."
+
+print "> Tkinter"
 import Tkinter
-import subprocess
-import tkFileDialog
-import shutil
 from Tkinter import *
 from Tkinter import Frame
+print "> subprocess"
+import subprocess
+print "> tkFileDialog"
+import tkFileDialog
+print "> shutil"
+import shutil
+print "> Image"
 try:
 	from PIL import Image
 except ImportError:
 	import Image
+print "> ImageOps"
 try:
 	from PIL import ImageOps
 except ImportError:
 	import ImageOps
+print "> ImageTk"
 try:
 	from PIL import ImageTk
 except ImportError:
 	import ImageTk
+print "Done"
 
 def pause():
 	#os.system("pause")
