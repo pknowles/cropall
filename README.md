@@ -1,10 +1,16 @@
 # cropall
 
 A small cross-platform python script to make cropping and resizing images fast.
-I'm surprised there aren't others out there. `click2crop` looks good but is not free.
+Programs like gimp take way too long to start, open an image, crop it, export it.
+A batch job/script can automate it but everything gets cropped at the same positions.
+This sits in the middle, automating loading/clicking crop/save/next so your amazing
+human vision can be used to quickly select what needs to be cropped and not wasted
+on navigating clunky GUI hierarchies.
+I'm surprised there aren't others out there, or maybe I didn't spend long enough
+searching. `click2crop` looks good but is not free.
 
-This is basically a minimal GUI for an imagemagick `convert in.jpg -crop <stuff> -resize <stuff> out.jpg`
-with a preview.
+This is really a minimal GUI and preview for an imagemagick `convert in.jpg -crop <stuff> -resize <stuff> out.jpg`
+command.
 
 # Install
 
