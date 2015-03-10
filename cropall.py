@@ -81,6 +81,7 @@ if resize_width < -1 or resize_height < -1:
 
 class MyApp(Tk):
 	def getImages(self, dir):
+		print "Scanning " + dir
 		allImages = []
 		for i in os.listdir(dir):
 			b, e = os.path.splitext(i)
@@ -96,8 +97,11 @@ class MyApp(Tk):
 		infiles = self.getImages(self.inDir)
 		
 		if not len(infiles):
+			print "No images in the current directory. Please select a different directory."
 			self.inDir = tkFileDialog.askdirectory(parent=self, initialdir="/",title='Please select a directory')
 			if not len(self.inDir):
+				print "No directory selected. Exiting."
+				pause()
 				raise SystemExit()
 			self.inDir = os.path.normpath(self.inDir)
 			infiles = self.getImages(self.inDir)
@@ -105,12 +109,17 @@ class MyApp(Tk):
 				print "No images found in " + self.inDir + ". Exiting."
 				pause()
 				raise SystemExit()
+			print "Found", len(infiles), "images"
+		else:
+			print "Found", len(infiles), "images in the current directory"
 		
 		self.outDir = os.path.join(self.inDir, out_directory)
 
 		if not os.path.exists(self.outDir):
 			print "Creating output directory, " + self.outDir
 			os.makedirs(self.outDir)
+		
+		print "Initializing GUI"
 	
 		self.grid_rowconfigure(0, weight=1)
 		self.grid_columnconfigure(0, weight=1)
@@ -175,19 +184,12 @@ class MyApp(Tk):
 		self.previewLabel = Label(self, relief=FLAT, borderwidth=0)
 		self.previewLabel.grid(row=0, column=1, sticky='nw', padx=0, pady=0)
 		
-		#self.load_imgfile(allImages[0])
-		self.current = 0
-		while self.current < len(self.files) and os.path.exists(os.path.join(self.outDir, self.files[self.current])):
-			print "Skipping " + self.files[self.current] + ". Already cropped."
-			self.current += 1
-		self.current += 1
-		self.previous()
-		
 		self.restrictSizes.set(0 if allow_fractional_size else 1)
 
 		self.aspect[0].trace("w", self.on_aspect_changed)
 		self.aspect[1].trace("w", self.on_aspect_changed)
 		self.restrictSizes.trace("w", self.on_option_changed)
+		self.bind('<space>', self.save_next)
 		self.c.bind('<ButtonPress-1>', self.on_mouse_down)
 		self.c.bind('<B1-Motion>', self.on_mouse_drag)
 		self.c.bind('<ButtonRelease-1>', self.on_mouse_up)
@@ -195,6 +197,15 @@ class MyApp(Tk):
 		self.bind('<Button-4>', self.on_mouse_scroll)
 		self.bind('<Button-5>', self.on_mouse_scroll)
 		self.bind('<MouseWheel>', self.on_mouse_scroll)
+		
+		print "Checking for existing crops"
+		#self.load_imgfile(allImages[0])
+		self.current = 0
+		while self.current < len(self.files) and os.path.exists(os.path.join(self.outDir, self.files[self.current])):
+			print "Skipping " + self.files[self.current] + ". Already cropped."
+			self.current += 1
+		self.current += 1
+		self.previous()
 	
 	def updateCropSize(self):
 		if self.cropIndex <= 4:
@@ -265,7 +276,7 @@ class MyApp(Tk):
 		#os.system(c)
 		self.next()
 	
-	def save_next(self):
+	def save_next(self, event=None):
 		box = self.getRealBox()
 		c = "convert \"" + os.path.join(self.inDir, self.currentName) + "\""
 		c += " -crop " + str(box[2]-box[0]) + "x" + str(box[3]-box[1]) + "+" + str(box[0]) + "+" + str(box[1])
