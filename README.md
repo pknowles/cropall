@@ -9,8 +9,9 @@ on navigating clunky GUI hierarchies.
 I'm surprised there aren't others out there, or maybe I didn't spend long enough
 searching. `click2crop` looks good but is not free.
 
-This is really a minimal GUI and preview for an imagemagick `convert in.jpg -crop <stuff> -resize <stuff> out.jpg`
-command.
+This is really a minimal GUI and preview for the following imagemagick command:
+
+    convert in.jpg -crop <region> -resize <fit> out.jpg
 
 # Install
 
@@ -34,5 +35,5 @@ There are a few options at the top of the script file itself (I haven't bothered
 
 ## Additional
 
-Do whatever you want with it (GPL3). The usual don't-blame-me-if-it-deletes-your-stuff.
+Do whatever you want with it, within GPL3. The usual don't-blame-me-if-it-deletes-your-stuff.
 
