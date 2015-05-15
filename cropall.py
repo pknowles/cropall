@@ -1,10 +1,11 @@
-#!/bin/python
+#! /usr/bin/env python2
 
 #README:
 #this script needs
-#1. python 2.7 (or at least < 3) https://www.python.org/downloads/release/python-278/
-#2. imagemagick http://www.imagemagick.org/script/binary-releases.php#windows
-#3. both added to PATH http://stackoverflow.com/questions/6318156/adding-python-path-on-windows-7
+#1.  python 2.7 (or at least < 3) https://www.python.org/downloads/release/python-278/
+#        also python-tk and python-imaging-tk
+#2.  imagemagick http://www.imagemagick.org/script/binary-releases.php#windows
+#3.  both added to PATH http://stackoverflow.com/questions/6318156/adding-python-path-on-windows-7
 
 #4. If "import Image" fails below, do this...
 #    install pip http://stackoverflow.com/questions/4750806/how-to-install-pip-on-windows
@@ -34,41 +35,55 @@ allow_fractional_size = False
 
 
 
-import os, sys
-print sys.version
 
-print "Importing libraries..."
-
-print "> Tkinter"
-import Tkinter
-from Tkinter import *
-from Tkinter import Frame
-print "> subprocess"
-import subprocess
-print "> tkFileDialog"
-import tkFileDialog
-print "> shutil"
-import shutil
-print "> Image"
-try:
-	from PIL import Image
-except ImportError:
-	import Image
-print "> ImageOps"
-try:
-	from PIL import ImageOps
-except ImportError:
-	import ImageOps
-print "> ImageTk"
-try:
-	from PIL import ImageTk
-except ImportError:
-	import ImageTk
-print "Done"
 
 def pause():
-	#os.system("pause")
 	raw_input("Press Enter to continue...")
+
+try:
+	import os, sys
+	print sys.version
+
+	from distutils import spawn
+	convert_path = spawn.find_executable("convwert")
+	if convert_path:
+		print "Found 'convert' at", convert_path
+	else:
+		raise EnvironmentError("Could not find ImageMagick's 'convert'. Is it installed and in PATH?")
+
+	print "Importing libraries..."
+	
+	print "> Tkinter"
+	import Tkinter
+	from Tkinter import *
+	from Tkinter import Frame
+	print "> subprocess"
+	import subprocess
+	print "> tkFileDialog"
+	import tkFileDialog
+	print "> shutil"
+	import shutil
+	print "> Image"
+	try:
+		from PIL import Image
+	except ImportError:
+		import Image
+	print "> ImageOps"
+	try:
+		from PIL import ImageOps
+	except ImportError:
+		import ImageOps
+	print "> ImageTk"
+	try:
+		from PIL import ImageTk
+	except ImportError:
+		import ImageTk
+	print "Done"
+except Exception as e:
+	#because windows closes the window
+	print e
+	pause()
+	raise e
 
 if resize_height == 0:
 	resize_width = 0

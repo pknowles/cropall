@@ -15,16 +15,28 @@ This is really a minimal GUI and preview for the following imagemagick command:
 
 # Install
 
+    git clone https://github.com/pknowles/cropall.git
+
 This needs...
 
 -  python 2.7 (added to PATH)
-   - python-pillow
-   - python-pillow-tk
--  imagemagick (added to PATH)
+   - python-tk
+   - python-imaging-tk
+-  ImageMagick (added to PATH)
 
+    #Ubuntu
+    sudo apt-get install python python-tk python-imaging-tk imagemagick
+	
+	#Fedora
+	sudo yum install python tkinter python-imaging-tk ImageMagick
+
+I've installed and am using Pillow (`python-pillow` and `python-pillow-tk`) for this, but it may work with PIL.
+
+> [Warning: Pillow and PIL cannot co-exist in the same environment. Before installing Pillow, please uninstall PIL.](http://pillow.readthedocs.org/en/latest/installation.html)
+	
 # Instructions
 
-1. Run the script (double click if the OS knows to open-with).
+1. Run the script (double click if the OS knows to open-with or `./cropall.py`).
 
 2. If there are images in the current working directory, it should start. Otherwise it will ask for a directory.
 
