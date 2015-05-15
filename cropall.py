@@ -45,7 +45,7 @@ try:
 	print sys.version
 
 	from distutils import spawn
-	convert_path = spawn.find_executable("convwert")
+	convert_path = spawn.find_executable("convert")
 	if convert_path:
 		print "Found 'convert' at", convert_path
 	else:
