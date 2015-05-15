@@ -24,11 +24,13 @@ This needs...
    - python-imaging-tk
 -  ImageMagick (added to PATH)
 
-    #Ubuntu
-    sudo apt-get install python python-tk python-imaging-tk imagemagick
-	
-	#Fedora
-	sudo yum install python tkinter python-imaging-tk ImageMagick
+```
+#Ubuntu
+sudo apt-get install python python-tk python-imaging-tk imagemagick
+
+#Fedora
+sudo yum install python tkinter python-imaging-tk ImageMagick
+```
 
 I've installed and am using Pillow (`python-pillow` and `python-pillow-tk`) for this, but it may work with PIL.
 
