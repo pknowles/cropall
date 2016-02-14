@@ -13,6 +13,10 @@ This is really a minimal GUI and preview for the following imagemagick command:
 
     convert in.jpg -crop <region> -resize <fit> out.jpg
 
+## Forks
+
+- [@rystraum](https://github.com/rystraum/cropall) has added a number of features such as rotation and keyboard shortcuts. See [#2](https://github.com/pknowles/cropall/issues/2).
+
 # Install
 
     git clone https://github.com/pknowles/cropall.git
