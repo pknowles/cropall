@@ -52,7 +52,7 @@ try:
 		raise EnvironmentError("Could not find ImageMagick's 'convert'. Is it installed and in PATH?")
 
 	print "Importing libraries..."
-	
+
 	print "> Tkinter"
 	import Tkinter
 	from Tkinter import *
@@ -117,11 +117,11 @@ class MyApp(Tk):
 
 	def __init__(self):
 		Tk.__init__(self)
-		
+
 		self.inDir = os.getcwd()
-		
+
 		infiles = self.getImages(self.inDir)
-		
+
 		if not len(infiles):
 			print "No images in the current directory. Please select a different directory."
 			self.inDir = tkFileDialog.askdirectory(parent=self, initialdir="/",title='Please select a directory')
@@ -138,24 +138,24 @@ class MyApp(Tk):
 			print "Found", len(infiles), "images"
 		else:
 			print "Found", len(infiles), "images in the current directory"
-		
+
 		self.outDir = os.path.join(self.inDir, out_directory)
 
 		if not os.path.exists(self.outDir):
 			print "Creating output directory, " + self.outDir
 			os.makedirs(self.outDir)
-		
+
 		print "Initializing GUI"
-	
+
 		self.grid_rowconfigure(0, weight=1)
 		self.grid_columnconfigure(0, weight=1)
 		self.geometry("1024x512")
 		#self.resizable(0,0)
-		
+
 		self.files = infiles
-		
+
 		self.preview = None
-		
+
 		self.item = None
 		self.cropIndex = 2
 		self.x = 0
@@ -165,20 +165,20 @@ class MyApp(Tk):
 		#self.main = ScrolledCanvas(self)
 		#self.main.grid(row=0, column=0, sticky='nsew')
 		#self.c = self.main.canv
-		
+
 		#self.frame = Frame(self)
 		#self.frame.grid(row=0, column=0, sticky='nsew')
 		#self.frame.grid_rowconfigure(0, weight=1)
 		#self.frame.grid_columnconfigure(0, weight=1)
 		#self.c = Canvas(self.frame, bd=0, highlightthickness=0, background='black')
 		#self.c.grid(row=0, column=0, sticky='nsew', padx=4, pady=4)
-		
+
 		self.controls = Frame(self)
 		self.controls.grid(row=1, column=0, columnspan=2, sticky="nsew")
 		self.buttons = []
 		self.info = Label(self.controls, text="Pyar's Cropper")
 		self.info.grid(row=0, column=0, sticky="nsew")
-		
+
 		self.inputs = []
 		self.aspect = (StringVar(), StringVar())
 		self.aspect[0].set("Ratio X")
@@ -187,7 +187,7 @@ class MyApp(Tk):
 		self.inputs[-1].grid(row=0, column=1, sticky="nsew")
 		self.inputs += [Entry(self.controls, textvariable=self.aspect[1])]
 		self.inputs[-1].grid(row=0, column=2, sticky="nsew")
-		
+
 		self.buttons += [Button(self.controls, text="Prev", command=self.previous)]
 		self.buttons[-1].grid(row=0, column=3, sticky="nsew")
 		self.buttons += [Button(self.controls, text="Next", command=self.next)]
@@ -198,7 +198,7 @@ class MyApp(Tk):
 		self.buttons[-1].grid(row=0, column=6, sticky="nsew")
 		self.buttons += [Button(self.controls, text="Crop", command=self.save_next)]
 		self.buttons[-1].grid(row=0, column=7, sticky="nsew")
-		
+
 		self.restrictSizes = IntVar()
 		self.inputs += [Checkbutton(self.controls, text="Perfect Pixel Ratio", variable=self.restrictSizes)]
 		self.inputs[-1].grid(row=0, column=8, sticky="nsew")
@@ -206,10 +206,10 @@ class MyApp(Tk):
 		self.imageLabel = Canvas(self, highlightthickness=0)
 		self.imageLabel.grid(row=0, column=0, sticky='nw', padx=0, pady=0)
 		self.c = self.imageLabel
-		
+
 		self.previewLabel = Label(self, relief=FLAT, borderwidth=0)
 		self.previewLabel.grid(row=0, column=1, sticky='nw', padx=0, pady=0)
-		
+
 		self.restrictSizes.set(0 if allow_fractional_size else 1)
 
 		self.aspect[0].trace("w", self.on_aspect_changed)
@@ -223,7 +223,7 @@ class MyApp(Tk):
 		self.bind('<Button-4>', self.on_mouse_scroll)
 		self.bind('<Button-5>', self.on_mouse_scroll)
 		self.bind('<MouseWheel>', self.on_mouse_scroll)
-		
+
 		print "Checking for existing crops"
 		#self.load_imgfile(allImages[0])
 		self.current = 0
@@ -232,7 +232,7 @@ class MyApp(Tk):
 			self.current += 1
 		self.current += 1
 		self.previous()
-	
+
 	def updateCropSize(self):
 		if self.cropIndex <= 4:
 			self.cropdiv = 8.0 / (9.0 - self.cropIndex)
@@ -260,7 +260,7 @@ class MyApp(Tk):
 		box = (min(box[0]+w, imw)-w, min(box[1]+h, imh)-h)
 		box = (box[0], box[1], box[0]+w, box[1]+h)
 		return box
-	
+
 	def getPreviewBox(self):
 		imw = self.imageOrigSize[0]
 		imh = self.imageOrigSize[1]
@@ -269,18 +269,18 @@ class MyApp(Tk):
 		bbox = self.getRealBox()
 		bbox = (bbox[0]*prevw/imw, bbox[1]*prevh/imh, bbox[2]*prevw/imw, bbox[3]*prevh/imh)
 		return (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
-		
-	
+
+
 	def previous(self):
 		self.current -= 1
 		self.current = (self.current + len(self.files)) % len(self.files)
 		self.load_imgfile(self.files[self.current])
-	
+
 	def next(self):
 		self.current += 1
 		self.current = (self.current + len(self.files)) % len(self.files)
 		self.load_imgfile(self.files[self.current])
-		
+
 	def copy(self):
 		c = "copy \"" + os.path.join(self.inDir, self.currentName) + "\" \"" + os.path.join(self.outDir, self.currentName) + "\""
 		print c
@@ -288,7 +288,7 @@ class MyApp(Tk):
 		#subprocess.Popen(c, shell=True)
 		#os.system(c)
 		self.next()
-	
+
 	def resize(self):
 		if not (resize_width > 0):
 			print "Error: no resize specified. Not resizing"
@@ -301,7 +301,7 @@ class MyApp(Tk):
 		print "Running"
 		#os.system(c)
 		self.next()
-	
+
 	def save_next(self, event=None):
 		box = self.getRealBox()
 		c = "convert \"" + os.path.join(self.inDir, self.currentName) + "\""
@@ -314,17 +314,17 @@ class MyApp(Tk):
 		print "Running"
 		#os.system(c)
 		self.next()
-		
-	def load_imgfile(self, filename):		
+
+	def load_imgfile(self, filename):
 		self.currentName = filename
 		fullFilename = os.path.join(self.inDir, filename)
 		print "Loading " + fullFilename
 		img = Image.open(fullFilename)
-		
+
 		self.imageOrig = img
 		self.imageOrigSize = (img.size[0], img.size[1])
 		print "Image is " + str(self.imageOrigSize[0]) + "x" + str(self.imageOrigSize[1])
-		
+
 		basewidth = 512
 		wpercent = (basewidth/float(img.size[0]))
 		hsize = int((float(img.size[1])*float(wpercent)))
@@ -339,7 +339,7 @@ class MyApp(Tk):
 				img.thumbnail((basewidth,hsize), Image.NEAREST)
 		self.image = img
 		print "Resized preview"
-		
+
 		#self.geometry("1024x"+str(hsize + 100))
 		self.configure(relief='flat', background='red')
 
@@ -349,19 +349,19 @@ class MyApp(Tk):
 
 		self.previewPhoto = ImageTk.PhotoImage(self.image)
 		self.previewLabel.configure(image=self.previewPhoto)
-		
+
 		self.item = None
-		
+
 		self.on_aspect_changed(None, None, None) #update aspect ratio with new image size
-		
+
 		#self.imageLabel.pack(side = "left", fill = "both", expand = "yes")
 		#self.previewLabel.pack(side = "left", fill = "both", expand = "yes")
 		#self.c.pack(side = "bottom", fill = "both", expand = "yes")
-		
+
 		#self.c.xview_moveto(0)
 		#self.c.yview_moveto(0)
 		#self.c.config(scrollregion=self.c.bbox('all'))
-	
+
 	def test(self):
 		if not allow_fractional_size:
 			self.updateCropSize()
@@ -371,16 +371,16 @@ class MyApp(Tk):
 			#if self.imageOrigSize[1] % int(self.cropdiv) != 0: return False
 			#if self.imageOrigSize[0] % int(self.cropdiv) != 0: return False
 		return True
-		
+
 	def update_box(self, widget):
 		bbox = self.getPreviewBox()
 		#bbox = (widget.canvasx(bbox[0]), widget.canvasy(bbox[1]), widget.canvasx(bbox[2]), widget.canvasy(bbox[3]))
-							
+
 		if self.item is None:
 			self.item = widget.create_rectangle(bbox, outline="yellow")
 		else:
 			widget.coords(self.item, *bbox)
-			
+
 	def update_preview(self, widget):
 		if self.item:
 			#get a crop for the preview
@@ -391,7 +391,7 @@ class MyApp(Tk):
 				preview = self.image.crop(pbox) # region of interest
 			else:
 				preview = self.imageOrig.crop(box) # region of interest
-			
+
 			#add black borders for correct aspect ratio
 			#if preview.size[0] > 512:
 			preview.thumbnail(self.image.size, Image.ANTIALIAS) #downscale to preview rez
@@ -401,16 +401,16 @@ class MyApp(Tk):
 				bbox = (0, 0, int(preview.size[1] * aspect), preview.size[1])
 			else:
 				bbox = (0, 0, preview.size[0], int(preview.size[0] / aspect))
-			preview = ImageOps.expand(preview, border=(bbox[2]-preview.size[0], bbox[3]-preview.size[1]))
+			preview = ImageOps.expand(preview, border=((bbox[2]-preview.size[0])//2, (bbox[3]-preview.size[1])//2))
 			#preview = ImageOps.fit(preview, size=self.image.size, method=Image.ANTIALIAS, bleed=-10.0)
-			
+
 			#resize to preview rez (if too small)
 			self.preview = preview.resize(self.image.size, Image.ANTIALIAS)
 			self.previewPhoto = ImageTk.PhotoImage(self.preview)
 			self.previewLabel.configure(image=self.previewPhoto)
-			
+
 			print str(box[2]-box[0])+"x"+str(box[3]-box[1])+"+"+str(box[0])+"+"+str(box[1])
-	
+
 	def on_aspect_changed(self, event, var1, var2):
 		try:
 			x = float(self.aspect[0].get())
@@ -418,21 +418,21 @@ class MyApp(Tk):
 			if x < 0 or y < y:
 				raise ZeroDivisionError()
 			self.aspectRatio = x / y
-		except:
+		except (ZeroDivisionError, ValueError) as e:
 			self.aspectRatio = float(self.imageOrigSize[0])/float(self.imageOrigSize[1])
 		self.update_box(self.imageLabel)
 		self.update_preview(self.imageLabel)
-		
+
 	def on_option_changed(self, event, var1, var2):
 		global allow_fractional_size
 		allow_fractional_size = (self.restrictSizes.get() == 0)
-	
+
 	def on_mouse_scroll(self, event):
 		if event.num == 5 or event.delta < 0:
 			dir = -1
 		if event.num == 4 or event.delta > 0:
 			dir = 1
-		
+
 		if dir == 1:
 			while self.cropIndex < self.imagePhoto.width():
 				self.cropIndex += 1
@@ -444,12 +444,12 @@ class MyApp(Tk):
 			while self.cropIndex > 1:
 				self.cropIndex -= 1
 				if self.test(): break
-				
+
 		print self.cropIndex
-		
+
 		self.update_box(self.imageLabel)
 		self.update_preview(self.imageLabel)
-	
+
 	def on_mouse_down(self, event):
 		self.x = event.x
 		self.y = event.y
@@ -466,4 +466,3 @@ class MyApp(Tk):
 
 app =  MyApp()
 app.mainloop()
-
