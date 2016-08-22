@@ -3,14 +3,14 @@
 #README:
 #this script needs
 #1.  python 2.7 (or at least < 3) https://www.python.org/downloads/release/python-278/
-#        also python-tk and python-imaging-tk
+#		also python-tk and python-imaging-tk
 #2.  imagemagick http://www.imagemagick.org/script/binary-releases.php#windows
 #3.  both added to PATH http://stackoverflow.com/questions/6318156/adding-python-path-on-windows-7
 
 #4. If "import Image" fails below, do this...
-#    install pip http://stackoverflow.com/questions/4750806/how-to-install-pip-on-windows
-#    run "pip install Pillow"
-#    or on linux install python-pillow and python-pillow-tk http://stackoverflow.com/questions/10630736/no-module-named-image-tk
+#	install pip http://stackoverflow.com/questions/4750806/how-to-install-pip-on-windows
+#	run "pip install Pillow"
+#	or on linux install python-pillow and python-pillow-tk http://stackoverflow.com/questions/10630736/no-module-named-image-tk
 
 #you may change the below self-explanatory variables
 
@@ -32,6 +32,20 @@ antialiase_original_preview = True
 
 #ignores check to see if maintaining the apsect ratio perfectly is possible
 allow_fractional_size = False
+
+#selection mode: can be 'click-drag' or 'scroll'
+#scroll: you select a resizable rectangle of a fixed aspect ratio that can be resized using the scroll wheel
+#click-drag: you click at the top left corner of your selection, then drag down to the bottom-right corner and release. hold shift during dragging to move the entire selection.
+initial_selection_mode = 'scroll'
+
+#displays rule-of-third guidelines
+show_rule_of_thirds = False
+
+#color of the selection box
+selection_box_color = 'yellow'
+
+#whether the AR should be fixed by default
+default_fix_ratio = True
 
 
 
@@ -92,6 +106,9 @@ if resize_width < -1 or resize_height < -1:
 	pause()
 	resize_width = 0
 
+def clamp(x, a, b):
+	return min(max(x, a), b)
+
 # open a SPIDER image and convert to byte format
 #im = Image.open(allImages[0])
 #im = im.resize((250, 250), Image.ANTIALIAS)
@@ -118,10 +135,17 @@ class MyApp(Tk):
 	def __init__(self):
 		Tk.__init__(self)
 
-		self.inDir = os.getcwd()
+		self.wm_title("cropall")
+
+		# Try directory given on the command line or the current directory
+		if len(sys.argv) > 1:
+			self.inDir = sys.argv[1]
+		else:
+			self.inDir = os.getcwd()
 
 		infiles = self.getImages(self.inDir)
 
+		# If that didn't work, show a browse dialogue
 		if not len(infiles):
 			print "No images in the current directory. Please select a different directory."
 			self.inDir = tkFileDialog.askdirectory(parent=self, initialdir="/",title='Please select a directory')
@@ -157,10 +181,23 @@ class MyApp(Tk):
 		self.preview = None
 
 		self.item = None
+
+		self.mouse_down_coord = (0, 0)
+		self.mouse_move_coord = (0, 0)
+
+		# "scroll" selection center and crop index
 		self.cropIndex = 2
 		self.x = 0
 		self.y = 0
 		self.current = 0
+
+		# "click-drag" selection corners (top left and bottom right)
+		self.selection_tl_x = 0
+		self.selection_tl_y = 0
+		self.selection_br_x = 10
+		self.selection_br_y = 10
+
+		self.shift_pressed = False
 
 		#self.main = ScrolledCanvas(self)
 		#self.main.grid(row=0, column=0, sticky='nsew')
@@ -176,28 +213,35 @@ class MyApp(Tk):
 		self.controls = Frame(self)
 		self.controls.grid(row=1, column=0, columnspan=2, sticky="nsew")
 		self.buttons = []
-		self.info = Label(self.controls, text="Pyar's Cropper")
-		self.info.grid(row=0, column=0, sticky="nsew")
+		self.selection_mode = StringVar()
+		self.selection_mode.set(initial_selection_mode)
+		self.selection_mode_dropdown = OptionMenu(self.controls, self.selection_mode, 'click-drag', 'scroll')
+		self.selection_mode_dropdown.grid(row=0, column=0, sticky="nsew")
 
 		self.inputs = []
-		self.aspect = (StringVar(), StringVar())
-		self.aspect[0].set("Ratio X")
-		self.aspect[1].set("Ratio Y")
-		self.inputs += [Entry(self.controls, textvariable=self.aspect[0])]
+
+		self.restrictRatio = IntVar()
+		self.inputs += [Checkbutton(self.controls, text="Fix Aspect Ratio", variable=self.restrictRatio)]
 		self.inputs[-1].grid(row=0, column=1, sticky="nsew")
-		self.inputs += [Entry(self.controls, textvariable=self.aspect[1])]
+
+		self.aspect = (StringVar(), StringVar())
+		self.aspect[0].set("RatioX")
+		self.aspect[1].set("RatioY")
+		self.inputs += [Entry(self.controls, textvariable=self.aspect[0])]
 		self.inputs[-1].grid(row=0, column=2, sticky="nsew")
+		self.inputs += [Entry(self.controls, textvariable=self.aspect[1])]
+		self.inputs[-1].grid(row=0, column=3, sticky="nsew")
 
 		self.buttons += [Button(self.controls, text="Prev", command=self.previous)]
-		self.buttons[-1].grid(row=0, column=3, sticky="nsew")
-		self.buttons += [Button(self.controls, text="Next", command=self.next)]
 		self.buttons[-1].grid(row=0, column=4, sticky="nsew")
-		self.buttons += [Button(self.controls, text="Copy", command=self.copy)]
+		self.buttons += [Button(self.controls, text="Next", command=self.next)]
 		self.buttons[-1].grid(row=0, column=5, sticky="nsew")
-		self.buttons += [Button(self.controls, text="Resize", command=self.resize)]
+		self.buttons += [Button(self.controls, text="Copy", command=self.copy)]
 		self.buttons[-1].grid(row=0, column=6, sticky="nsew")
-		self.buttons += [Button(self.controls, text="Crop", command=self.save_next)]
+		self.buttons += [Button(self.controls, text="Resize", command=self.resize)]
 		self.buttons[-1].grid(row=0, column=7, sticky="nsew")
+		self.buttons += [Button(self.controls, text="Crop", command=self.save_next)]
+		self.buttons[-1].grid(row=0, column=8, sticky="nsew")
 
 		self.restrictSizes = IntVar()
 		self.inputs += [Checkbutton(self.controls, text="Perfect Pixel Ratio", variable=self.restrictSizes)]
@@ -211,15 +255,22 @@ class MyApp(Tk):
 		self.previewLabel.grid(row=0, column=1, sticky='nw', padx=0, pady=0)
 
 		self.restrictSizes.set(0 if allow_fractional_size else 1)
+		self.restrictRatio.set(1 if default_fix_ratio else 0)
 
 		self.aspect[0].trace("w", self.on_aspect_changed)
 		self.aspect[1].trace("w", self.on_aspect_changed)
 		self.restrictSizes.trace("w", self.on_option_changed)
+		self.restrictRatio.trace("w", self.on_aspect_changed)
 		self.bind('<space>', self.save_next)
+		self.bind('d', self.next)
+		self.bind('a', self.previous)
 		self.c.bind('<ButtonPress-1>', self.on_mouse_down)
 		self.c.bind('<B1-Motion>', self.on_mouse_drag)
 		self.c.bind('<ButtonRelease-1>', self.on_mouse_up)
 		#self.c.bind('<Button-3>', self.on_right_click)
+		self.bind('<KeyPress-Shift_L>', self.on_shift_press)
+		self.bind('<KeyRelease-Shift_L>', self.on_shift_release)
+		self.bind('<Escape>', self.remove_focus)
 		self.bind('<Button-4>', self.on_mouse_scroll)
 		self.bind('<Button-5>', self.on_mouse_scroll)
 		self.bind('<MouseWheel>', self.on_mouse_scroll)
@@ -250,15 +301,59 @@ class MyApp(Tk):
 		return w, h
 
 	def getRealBox(self):
-		w, h = self.getCropSize()
 		imw = self.imageOrigSize[0]
 		imh = self.imageOrigSize[1]
 		prevw = self.imagePhoto.width()
 		prevh = self.imagePhoto.height()
-		box = (int(round(self.x*imw/prevw))-w//2, int(round(self.y*imh/prevh))-h//2)
-		box = (max(box[0], 0), max(box[1], 0))
-		box = (min(box[0]+w, imw)-w, min(box[1]+h, imh)-h)
-		box = (box[0], box[1], box[0]+w, box[1]+h)
+
+		if (self.selection_mode.get() == 'click-drag'):
+			top_left = (self.selection_tl_x*imw/prevw, self.selection_tl_y*imh/prevh)
+			top_left = (max(top_left[0], 0), max(top_left[1], 0))
+			bottom_right = (self.selection_br_x*imw/prevw, self.selection_br_y*imh/prevh)
+			bottom_right = (max(top_left[0] + 1, min(bottom_right[0], imw)), max(top_left[1] + 1, min(bottom_right[1], imh)))
+			w = bottom_right[0] - top_left[0]
+			h = bottom_right[1] - top_left[1]
+
+			# increase box to cover the selection, matching the aspect ratio
+			if (self.restrictRatio.get() == 1):
+				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> increase height to match aspect
+					h = w / self.aspectRatio
+					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
+						bottom_right = (bottom_right[0], top_left[1] + h)
+					else:
+						top_left = (top_left[0], bottom_right[1] - h)
+				else: # box is too tall -> increase width to match aspect
+					w = h * self.aspectRatio
+					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
+						bottom_right = (top_left[0] + w, bottom_right[1])
+					else:
+						top_left = (bottom_right[0] - w, top_left[1])
+
+			"""
+			# reduce box to fit within selection, matching the aspect ratio
+			if (self.restrictRatio.get() == 1):
+				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> reduce width to match aspect
+					w = h * self.aspectRatio
+					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
+						bottom_right = (top_left[0] + w, bottom_right[1])
+					else:
+						top_left = (bottom_right[0] - w, top_left[1])
+				else: # box is too tall -> reduce height to match aspect
+					h = w / self.aspectRatio
+					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
+						bottom_right = (bottom_right[0], top_left[1] + h)
+					else:
+						top_left = (top_left[0], bottom_right[1] - h)
+			"""
+
+			box = (int(round(top_left[0])), int(round(top_left[1])), int(round(bottom_right[0])), int(round(bottom_right[1])))
+		else:
+			w, h = self.getCropSize()
+			box = (int(round(self.x*imw/prevw))-w//2, int(round(self.y*imh/prevh))-h//2)
+			box = (max(box[0], 0), max(box[1], 0))
+			box = (min(box[0]+w, imw)-w, min(box[1]+h, imh)-h)
+			box = (box[0], box[1], box[0]+w, box[1]+h)
+
 		return box
 
 	def getPreviewBox(self):
@@ -271,12 +366,12 @@ class MyApp(Tk):
 		return (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
 
 
-	def previous(self):
+	def previous(self, event=None):
 		self.current -= 1
 		self.current = (self.current + len(self.files)) % len(self.files)
 		self.load_imgfile(self.files[self.current])
 
-	def next(self):
+	def next(self, event=None):
 		self.current += 1
 		self.current = (self.current + len(self.files)) % len(self.files)
 		self.load_imgfile(self.files[self.current])
@@ -341,7 +436,7 @@ class MyApp(Tk):
 		print "Resized preview"
 
 		#self.geometry("1024x"+str(hsize + 100))
-		self.configure(relief='flat', background='red')
+		self.configure(relief='flat', background='gray')
 
 		self.imagePhoto = ImageTk.PhotoImage(self.image)
 		self.imageLabel.configure(width=self.imagePhoto.width(), height=self.imagePhoto.height())
@@ -351,6 +446,9 @@ class MyApp(Tk):
 		self.previewLabel.configure(image=self.previewPhoto)
 
 		self.item = None
+
+		self.verti_aux_item = None
+		self.horiz_aux_item = None
 
 		self.on_aspect_changed(None, None, None) #update aspect ratio with new image size
 
@@ -377,9 +475,21 @@ class MyApp(Tk):
 		#bbox = (widget.canvasx(bbox[0]), widget.canvasy(bbox[1]), widget.canvasx(bbox[2]), widget.canvasy(bbox[3]))
 
 		if self.item is None:
-			self.item = widget.create_rectangle(bbox, outline="yellow")
+			self.item = widget.create_rectangle(bbox, outline=selection_box_color)
 		else:
 			widget.coords(self.item, *bbox)
+
+		if (show_rule_of_thirds):
+			horiz_bbox = (bbox[0], bbox[1] + (bbox[3] - bbox[1]) / 3, bbox[2], bbox[3] - (bbox[3] - bbox[1]) / 3)
+			verti_bbox = (bbox[0] + (bbox[2] - bbox[0]) / 3, bbox[1], bbox[2] - (bbox[2] - bbox[0]) / 3, bbox[3])
+			if self.horiz_aux_item is None:
+					self.horiz_aux_item = widget.create_rectangle(horiz_bbox, outline=selection_box_color)
+			else:
+					widget.coords(self.horiz_aux_item, *horiz_bbox)
+			if self.verti_aux_item is None:
+					self.verti_aux_item = widget.create_rectangle(verti_bbox, outline=selection_box_color)
+			else:
+					widget.coords(self.verti_aux_item, *verti_bbox)
 
 	def update_preview(self, widget):
 		if self.item:
@@ -411,14 +521,20 @@ class MyApp(Tk):
 
 			print str(box[2]-box[0])+"x"+str(box[3]-box[1])+"+"+str(box[0])+"+"+str(box[1])
 
+	def remove_focus(self, event=None):
+			self.focus()
+
 	def on_aspect_changed(self, event, var1, var2):
-		try:
-			x = float(self.aspect[0].get())
-			y = float(self.aspect[1].get())
-			if x < 0 or y < y:
-				raise ZeroDivisionError()
-			self.aspectRatio = x / y
-		except (ZeroDivisionError, ValueError) as e:
+		if (self.restrictRatio.get() == 1):
+			try:
+				x = float(self.aspect[0].get())
+				y = float(self.aspect[1].get())
+				if x < 0 or y < 1:
+					raise ZeroDivisionError()
+				self.aspectRatio = x / y
+			except (ZeroDivisionError, ValueError) as e:
+				self.aspectRatio = float(self.imageOrigSize[0])/float(self.imageOrigSize[1])
+		else:
 			self.aspectRatio = float(self.imageOrigSize[0])/float(self.imageOrigSize[1])
 		self.update_box(self.imageLabel)
 		self.update_preview(self.imageLabel)
@@ -451,18 +567,54 @@ class MyApp(Tk):
 		self.update_preview(self.imageLabel)
 
 	def on_mouse_down(self, event):
+		self.remove_focus()
+
+		self.mouse_down_coord = (event.x, event.y)
+		self.mouse_move_coord = (event.x, event.y)
+
 		self.x = event.x
 		self.y = event.y
+
 		self.update_box(event.widget)
 
 	def on_mouse_drag(self, event):
+
+		delta = (event.x - self.mouse_move_coord[0], event.y - self.mouse_move_coord[1])
+		self.mouse_move_coord = (event.x, event.y)
+
+		prevw = self.imagePhoto.width()
+		prevh = self.imagePhoto.height()
+
+		#click-drag selection
+		if self.shift_pressed:
+			move = [delta[0], delta[1]]
+			move[0] = max(self.selection_tl_x + move[0], 0) - self.selection_tl_x
+			move[0] = min(self.selection_br_x + move[0], prevw) - self.selection_br_x
+			move[1] = max(self.selection_tl_y + move[1], 0) - self.selection_tl_y
+			move[1] = min(self.selection_br_y + move[1], prevw) - self.selection_br_y
+			self.selection_tl_x += move[0]
+			self.selection_tl_y += move[1]
+			self.selection_br_x += move[0]
+			self.selection_br_y += move[1]
+		else:
+			self.selection_tl_x = min(self.mouse_down_coord[0], event.x)
+			self.selection_tl_y = min(self.mouse_down_coord[1], event.y)
+			self.selection_br_x = max(self.mouse_down_coord[0], event.x) + 1
+			self.selection_br_y = max(self.mouse_down_coord[1], event.y) + 1
+
 		self.x = event.x
 		self.y = event.y
+
 		self.update_box(event.widget)
 
 	def on_mouse_up(self, event):
 		self.update_preview(event.widget)
 
+	def on_shift_press(self, event):
+		self.shift_pressed = True
+
+	def on_shift_release(self, event):
+		self.shift_pressed = False
 
 app =  MyApp()
 app.mainloop()
