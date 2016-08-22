@@ -182,7 +182,7 @@ class MyApp(Tk):
 
 		self.item = None
 
-		self.mouse_down_coord = (0, 0)
+		self.opposite_corner_coord = (0, 0)
 		self.mouse_move_coord = (0, 0)
 
 		# "scroll" selection center and crop index
@@ -318,13 +318,13 @@ class MyApp(Tk):
 			if (self.restrictRatio.get() == 1):
 				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> increase height to match aspect
 					h = w / self.aspectRatio
-					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
+					if self.mouse_move_coord[1] > self.opposite_corner_coord[1]:
 						bottom_right = (bottom_right[0], top_left[1] + h)
 					else:
 						top_left = (top_left[0], bottom_right[1] - h)
 				else: # box is too tall -> increase width to match aspect
 					w = h * self.aspectRatio
-					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
+					if self.mouse_move_coord[0] > self.opposite_corner_coord[0]:
 						bottom_right = (top_left[0] + w, bottom_right[1])
 					else:
 						top_left = (bottom_right[0] - w, top_left[1])
@@ -334,13 +334,13 @@ class MyApp(Tk):
 			if (self.restrictRatio.get() == 1):
 				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> reduce width to match aspect
 					w = h * self.aspectRatio
-					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
+					if self.mouse_move_coord[0] > self.opposite_corner_coord[0]:
 						bottom_right = (top_left[0] + w, bottom_right[1])
 					else:
 						top_left = (bottom_right[0] - w, top_left[1])
 				else: # box is too tall -> reduce height to match aspect
 					h = w / self.aspectRatio
-					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
+					if self.mouse_move_coord[1] > self.opposite_corner_coord[1]:
 						bottom_right = (bottom_right[0], top_left[1] + h)
 					else:
 						top_left = (top_left[0], bottom_right[1] - h)
@@ -569,7 +569,7 @@ class MyApp(Tk):
 	def on_mouse_down(self, event):
 		self.remove_focus()
 
-		self.mouse_down_coord = (event.x, event.y)
+		self.opposite_corner_coord = (event.x, event.y)
 		self.mouse_move_coord = (event.x, event.y)
 
 		self.x = event.x
@@ -587,20 +587,16 @@ class MyApp(Tk):
 
 		#click-drag selection
 		if self.shift_pressed:
-			move = [delta[0], delta[1]]
-			move[0] = max(self.selection_tl_x + move[0], 0) - self.selection_tl_x
-			move[0] = min(self.selection_br_x + move[0], prevw) - self.selection_br_x
-			move[1] = max(self.selection_tl_y + move[1], 0) - self.selection_tl_y
-			move[1] = min(self.selection_br_y + move[1], prevw) - self.selection_br_y
-			self.selection_tl_x += move[0]
-			self.selection_tl_y += move[1]
-			self.selection_br_x += move[0]
-			self.selection_br_y += move[1]
+			self.selection_tl_x += delta[0]
+			self.selection_tl_y += delta[1]
+			self.selection_br_x += delta[0]
+			self.selection_br_y += delta[1]
+                        self.opposite_corner_coord = (self.opposite_corner_coord[0] + delta[0], self.opposite_corner_coord[1] + delta[1])
 		else:
-			self.selection_tl_x = min(self.mouse_down_coord[0], event.x)
-			self.selection_tl_y = min(self.mouse_down_coord[1], event.y)
-			self.selection_br_x = max(self.mouse_down_coord[0], event.x) + 1
-			self.selection_br_y = max(self.mouse_down_coord[1], event.y) + 1
+			self.selection_tl_x = min(self.opposite_corner_coord[0], event.x)
+			self.selection_tl_y = min(self.opposite_corner_coord[1], event.y)
+			self.selection_br_x = max(self.opposite_corner_coord[0], event.x) + 1
+			self.selection_br_y = max(self.opposite_corner_coord[1], event.y) + 1
 
 		self.x = event.x
 		self.y = event.y
