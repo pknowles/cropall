@@ -106,6 +106,9 @@ if resize_width < -1 or resize_height < -1:
 	pause()
 	resize_width = 0
 
+def clamp(x, a, b):
+	return min(max(x, a), b)
+
 # open a SPIDER image and convert to byte format
 #im = Image.open(allImages[0])
 #im = im.resize((250, 250), Image.ANTIALIAS)
@@ -178,6 +181,9 @@ class MyApp(Tk):
 		self.preview = None
 
 		self.item = None
+
+		self.mouse_down_coord = (0, 0)
+		self.mouse_move_coord = (0, 0)
 
 		# "scroll" selection center and crop index
 		self.cropIndex = 2
@@ -301,16 +307,46 @@ class MyApp(Tk):
 		prevh = self.imagePhoto.height()
 
 		if (self.selection_mode.get() == 'click-drag'):
-				top_left = (self.selection_tl_x*imw/prevw, self.selection_tl_y*imh/prevh)
-				top_left = (max(top_left[0], 0), max(top_left[1], 0))
-				bottom_right = (self.selection_br_x*imw/prevw, self.selection_br_y*imh/prevh)
-				bottom_right = (max(top_left[0] + 1, min(bottom_right[0], imw)), max(top_left[1] + 1, min(bottom_right[1], imh)))
-				if (self.restrictRatio.get() == 1):
-					if (self.aspectRatio >= 1): # box is wider than high -> fix width
-						bottom_right = (bottom_right[0], top_left[1] + (bottom_right[0] - top_left[0]) / self.aspectRatio)
-					else: # box is higher than wide -> fix height
-						bottom_right = (top_left[0] + (bottom_right[1] - top_left[1]) * self.aspectRatio, bottom_right[1])
-				box = (int(round(top_left[0])), int(round(top_left[1])), int(round(bottom_right[0])), int(round(bottom_right[1])))
+			top_left = (self.selection_tl_x*imw/prevw, self.selection_tl_y*imh/prevh)
+			top_left = (max(top_left[0], 0), max(top_left[1], 0))
+			bottom_right = (self.selection_br_x*imw/prevw, self.selection_br_y*imh/prevh)
+			bottom_right = (max(top_left[0] + 1, min(bottom_right[0], imw)), max(top_left[1] + 1, min(bottom_right[1], imh)))
+			w = bottom_right[0] - top_left[0]
+			h = bottom_right[1] - top_left[1]
+
+			# increase box to cover the selection, matching the aspect ratio
+			if (self.restrictRatio.get() == 1):
+				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> increase height to match aspect
+					h = w / self.aspectRatio
+					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
+						bottom_right = (bottom_right[0], top_left[1] + h)
+					else:
+						top_left = (top_left[0], bottom_right[1] - h)
+				else: # box is too tall -> increase width to match aspect
+					w = h * self.aspectRatio
+					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
+						bottom_right = (top_left[0] + w, bottom_right[1])
+					else:
+						top_left = (bottom_right[0] - w, top_left[1])
+
+			"""
+			# reduce box to fit within selection, matching the aspect ratio
+			if (self.restrictRatio.get() == 1):
+				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> reduce width to match aspect
+					w = h * self.aspectRatio
+					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
+						bottom_right = (top_left[0] + w, bottom_right[1])
+					else:
+						top_left = (bottom_right[0] - w, top_left[1])
+				else: # box is too tall -> reduce height to match aspect
+					h = w / self.aspectRatio
+					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
+						bottom_right = (bottom_right[0], top_left[1] + h)
+					else:
+						top_left = (top_left[0], bottom_right[1] - h)
+			"""
+
+			box = (int(round(top_left[0])), int(round(top_left[1])), int(round(bottom_right[0])), int(round(bottom_right[1])))
 		else:
 			w, h = self.getCropSize()
 			box = (int(round(self.x*imw/prevw))-w//2, int(round(self.y*imh/prevh))-h//2)
@@ -533,11 +569,8 @@ class MyApp(Tk):
 	def on_mouse_down(self, event):
 		self.remove_focus()
 
-		# click-drag selection
-		self.selection_tl_x = event.x
-		self.selection_tl_y = event.y
-		self.selection_br_x = event.x
-		self.selection_br_y = event.y
+		self.mouse_down_coord = (event.x, event.y)
+		self.mouse_move_coord = (event.x, event.y)
 
 		self.x = event.x
 		self.y = event.y
@@ -545,12 +578,29 @@ class MyApp(Tk):
 		self.update_box(event.widget)
 
 	def on_mouse_drag(self, event):
+
+		delta = (event.x - self.mouse_move_coord[0], event.y - self.mouse_move_coord[1])
+		self.mouse_move_coord = (event.x, event.y)
+
+		prevw = self.imagePhoto.width()
+		prevh = self.imagePhoto.height()
+
 		#click-drag selection
-		if (self.shift_pressed):
-			self.selection_tl_x = self.selection_tl_x + (event.x - self.selection_br_x)
-			self.selection_tl_y = self.selection_tl_y + (event.y - self.selection_br_y)
-		self.selection_br_x = max(event.x, self.selection_tl_x)
-		self.selection_br_y = max(event.y, self.selection_tl_y)
+		if self.shift_pressed:
+			move = [delta[0], delta[1]]
+			move[0] = max(self.selection_tl_x + move[0], 0) - self.selection_tl_x
+			move[0] = min(self.selection_br_x + move[0], prevw) - self.selection_br_x
+			move[1] = max(self.selection_tl_y + move[1], 0) - self.selection_tl_y
+			move[1] = min(self.selection_br_y + move[1], prevw) - self.selection_br_y
+			self.selection_tl_x += move[0]
+			self.selection_tl_y += move[1]
+			self.selection_br_x += move[0]
+			self.selection_br_y += move[1]
+		else:
+			self.selection_tl_x = min(self.mouse_down_coord[0], event.x)
+			self.selection_tl_y = min(self.mouse_down_coord[1], event.y)
+			self.selection_br_x = max(self.mouse_down_coord[0], event.x) + 1
+			self.selection_br_y = max(self.mouse_down_coord[1], event.y) + 1
 
 		self.x = event.x
 		self.y = event.y
