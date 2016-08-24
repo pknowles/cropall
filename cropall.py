@@ -337,9 +337,6 @@ class MyApp(Tk):
                                 move_up =  max(this_corner_image[1], opposite_corner_image[1]) - imh
                                 move_y = move_down if (move_down > 0) else (-move_up if (move_up > 0) else 0)
 
-                                print move_x
-                                print move_y
-
                                 this_corner_image = (this_corner_image[0] + move_x, this_corner_image[1] + move_y)
                                 opposite_corner_image = (opposite_corner_image[0] + move_x, opposite_corner_image[1] + move_y)
 
