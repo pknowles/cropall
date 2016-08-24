@@ -42,7 +42,7 @@ initial_selection_mode = 'scroll'
 show_rule_of_thirds = False
 
 #color of the selection box
-selection_box_color = 'red'
+selection_box_color = 'yellow'
 
 #whether the AR should be fixed by default
 default_fix_ratio = True
