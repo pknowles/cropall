@@ -240,7 +240,7 @@ class MyApp(Tk):
 
 		self.restrictSizes = IntVar()
 		self.inputs += [Checkbutton(self.controls, text="Perfect Pixel Ratio", variable=self.restrictSizes)]
-		self.inputs[-1].grid(row=0, column=8, sticky="nsew")
+		self.inputs[-1].grid(row=0, column=9, sticky="nsew")
 
 		self.imageLabel = Canvas(self, highlightthickness=0)
 		self.imageLabel.grid(row=0, column=9, sticky='nw', padx=0, pady=0)
