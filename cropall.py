@@ -3,14 +3,14 @@
 #README:
 #this script needs
 #1.  python 3.x  https://www.python.org/downloads/
-#		also python-tk and python-imaging-tk
+#               also python-tk and python-imaging-tk
 #2.  imagemagick http://www.imagemagick.org/script/binary-releases.php#windows
 #3.  both added to PATH http://stackoverflow.com/questions/6318156/adding-python-path-on-windows-7
 
 #4. If "import Image" fails below, do this...
-#	install pip http://stackoverflow.com/questions/4750806/how-to-install-pip-on-windows
-#	run "pip install Pillow"
-#	or on linux install python-pillow and python-pillow-tk http://stackoverflow.com/questions/10630736/no-module-named-image-tk
+#       install pip http://stackoverflow.com/questions/4750806/how-to-install-pip-on-windows
+#       run "pip install Pillow"
+#       or on linux install python-pillow and python-pillow-tk http://stackoverflow.com/questions/10630736/no-module-named-image-tk
 
 #you may change the below self-explanatory variables
 
@@ -182,20 +182,15 @@ class MyApp(Tk):
 
 		self.item = None
 
-		self.mouse_down_coord = (0, 0)
-		self.mouse_move_coord = (0, 0)
+		# "click-drag" selection corners
+		self.opposite_corner_coord = (0, 0)
+		self.this_corner_coord = (0, 0)
 
 		# "scroll" selection center and crop index
 		self.cropIndex = 2
 		self.x = 0
 		self.y = 0
 		self.current = 0
-
-		# "click-drag" selection corners (top left and bottom right)
-		self.selection_tl_x = 0
-		self.selection_tl_y = 0
-		self.selection_br_x = 10
-		self.selection_br_y = 10
 
 		self.shift_pressed = False
 
@@ -248,7 +243,7 @@ class MyApp(Tk):
 		self.inputs[-1].grid(row=0, column=8, sticky="nsew")
 
 		self.imageLabel = Canvas(self, highlightthickness=0)
-		self.imageLabel.grid(row=0, column=0, sticky='nw', padx=0, pady=0)
+		self.imageLabel.grid(row=0, column=9, sticky='nw', padx=0, pady=0)
 		self.c = self.imageLabel
 
 		self.previewLabel = Label(self, relief=FLAT, borderwidth=0)
@@ -300,6 +295,19 @@ class MyApp(Tk):
 		#w = int(self.imageOrigSize[0] / self.cropdiv)
 		return w, h
 
+	def correct_ar(self, this_corner_image, opposite_corner_image):
+		w = this_corner_image[0] - opposite_corner_image[0]
+		h = this_corner_image[1] - opposite_corner_image[1]
+		aspect_sign = -1 if (w*h < 0) else 1 # to determine whether this corner's x and y are on the same side of the other corner's x and y or not
+
+		# aspect ratio correction
+		if (abs(float(w)/float(h)) > self.aspectRatio): # box is too wide -> increase height to match aspect
+			this_corner_image = (this_corner_image[0], opposite_corner_image[1] + aspect_sign * w / self.aspectRatio)
+		if (abs(float(w)/float(h)) < self.aspectRatio): # box is too high -> increase width to match aspect
+			this_corner_image = (opposite_corner_image[0] + aspect_sign * h * self.aspectRatio, this_corner_image[1])
+		return this_corner_image, opposite_corner_image
+
+
 	def getRealBox(self):
 		imw = self.imageOrigSize[0]
 		imh = self.imageOrigSize[1]
@@ -307,47 +315,79 @@ class MyApp(Tk):
 		prevh = self.imagePhoto.height()
 
 		if (self.selection_mode.get() == 'click-drag'):
-			top_left = (self.selection_tl_x*imw/prevw, self.selection_tl_y*imh/prevh)
-			top_left = (max(top_left[0], 0), max(top_left[1], 0))
-			bottom_right = (self.selection_br_x*imw/prevw, self.selection_br_y*imh/prevh)
-			bottom_right = (max(top_left[0] + 1, min(bottom_right[0], imw)), max(top_left[1] + 1, min(bottom_right[1], imh)))
-			w = bottom_right[0] - top_left[0]
-			h = bottom_right[1] - top_left[1]
+			this_corner_image = (self.this_corner_coord[0] * imw / prevw, self.this_corner_coord[1] * imh / prevh)
+			opposite_corner_image = (self.opposite_corner_coord[0] * imw / prevw, self.opposite_corner_coord[1] * imh / prevh)
+			
+			w = this_corner_image[0] - opposite_corner_image[0]
+			h = this_corner_image[1] - opposite_corner_image[1]
 
-			# increase box to cover the selection, matching the aspect ratio
 			if (self.restrictRatio.get() == 1):
-				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> increase height to match aspect
-					h = w / self.aspectRatio
-					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
-						bottom_right = (bottom_right[0], top_left[1] + h)
-					else:
-						top_left = (top_left[0], bottom_right[1] - h)
-				else: # box is too tall -> increase width to match aspect
-					w = h * self.aspectRatio
-					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
-						bottom_right = (top_left[0] + w, bottom_right[1])
-					else:
-						top_left = (bottom_right[0] - w, top_left[1])
 
-			"""
-			# reduce box to fit within selection, matching the aspect ratio
-			if (self.restrictRatio.get() == 1):
-				if (float(w)/float(h) > self.aspectRatio): # box is too wide -> reduce width to match aspect
-					w = h * self.aspectRatio
-					if self.mouse_move_coord[0] > self.mouse_down_coord[0]:
-						bottom_right = (top_left[0] + w, bottom_right[1])
-					else:
-						top_left = (bottom_right[0] - w, top_left[1])
-				else: # box is too tall -> reduce height to match aspect
-					h = w / self.aspectRatio
-					if self.mouse_move_coord[1] > self.mouse_down_coord[1]:
-						bottom_right = (bottom_right[0], top_left[1] + h)
-					else:
-						top_left = (top_left[0], bottom_right[1] - h)
-			"""
+				if (self.shift_pressed): # never resize box when shift is pressed. only force it inside bounds.
 
-			box = (int(round(top_left[0])), int(round(top_left[1])), int(round(bottom_right[0])), int(round(bottom_right[1])))
-		else:
+					this_corner_image, opposite_corner_image = self.correct_ar(this_corner_image, opposite_corner_image)
+					w = this_corner_image[0] - opposite_corner_image[0]
+					h = this_corner_image[1] - opposite_corner_image[1]
+
+					move_toright = 0 - min(this_corner_image[0], opposite_corner_image[0]) 
+					move_toleft =  max(this_corner_image[0], opposite_corner_image[0]) - imw
+					move_x = move_toright if (move_toright > 0) else (-move_toleft if (move_toleft > 0) else 0)
+
+					move_down = 0 - min(this_corner_image[1], opposite_corner_image[1]) 
+					move_up =  max(this_corner_image[1], opposite_corner_image[1]) - imh
+					move_y = move_down if (move_down > 0) else (-move_up if (move_up > 0) else 0)
+
+					this_corner_image = (this_corner_image[0] + move_x, this_corner_image[1] + move_y)
+					opposite_corner_image = (opposite_corner_image[0] + move_x, opposite_corner_image[1] + move_y)
+
+
+				else: # shift is not pressed, check AR
+
+					opposite_corner_image = ( max(min(opposite_corner_image[0], imw), 0), max(min(opposite_corner_image[1], imh), 0) )
+					self.opposite_corner_coord = ( max(min(self.opposite_corner_coord[0], prevw), 0), max(min(self.opposite_corner_coord[1], prevh), 0) )
+
+					this_corner_image, opposite_corner_image = self.correct_ar(this_corner_image, opposite_corner_image)
+					w = this_corner_image[0] - opposite_corner_image[0]
+					h = this_corner_image[1] - opposite_corner_image[1]
+
+					# bounds correction
+					# left
+					if (this_corner_image[0] < 0):
+						correction = opposite_corner_image[0] / float(-w)
+						h = h * correction
+						this_corner_image = (0, opposite_corner_image[1] + h)
+						w = this_corner_image[0] - opposite_corner_image[0]
+
+					# top
+					if (this_corner_image[1] < 0):
+						correction = opposite_corner_image[1] / float(-h)
+						w = w * correction
+						this_corner_image = (opposite_corner_image[0] + w, 0)
+						h = this_corner_image[1] - opposite_corner_image[1]
+
+					# bottom
+					if (this_corner_image[1] > imh):
+						correction = (imh - opposite_corner_image[1]) / float(h)
+						w = w * correction
+						this_corner_image = (opposite_corner_image[0] + w, imh)
+						h = this_corner_image[1] - opposite_corner_image[1]
+
+					# right
+					if (this_corner_image[0] > imw):
+						correction = (imw - opposite_corner_image[0]) / float(w)
+						h = h * correction
+						this_corner_image = (imw, opposite_corner_image[1] + h)
+						w = this_corner_image[0] - opposite_corner_image[0]
+
+					this_corner_image = (int(round(this_corner_image[0])), int(round(this_corner_image[1])))
+
+			else: # no fixed AR
+				# bounds check
+				this_corner_image = ( max(min(this_corner_image[0], imw), 0.0), max(min(this_corner_image[1], imh), 0.0))
+			
+			box = ( min(this_corner_image[0], opposite_corner_image[0]), min(this_corner_image[1], opposite_corner_image[1]), max(this_corner_image[0], opposite_corner_image[0]), max(this_corner_image[1], opposite_corner_image[1]) )
+
+		else: # traditional (scroll) selection
 			w, h = self.getCropSize()
 			box = (int(round(self.x*imw/prevw))-w//2, int(round(self.y*imh/prevh))-h//2)
 			box = (max(box[0], 0), max(box[1], 0))
@@ -569,8 +609,8 @@ class MyApp(Tk):
 	def on_mouse_down(self, event):
 		self.remove_focus()
 
-		self.mouse_down_coord = (event.x, event.y)
-		self.mouse_move_coord = (event.x, event.y)
+		self.opposite_corner_coord = (event.x, event.y)
+		self.this_corner_coord = (event.x, event.y)
 
 		self.x = event.x
 		self.y = event.y
@@ -579,28 +619,15 @@ class MyApp(Tk):
 
 	def on_mouse_drag(self, event):
 
-		delta = (event.x - self.mouse_move_coord[0], event.y - self.mouse_move_coord[1])
-		self.mouse_move_coord = (event.x, event.y)
+		delta = (event.x - self.this_corner_coord[0], event.y - self.this_corner_coord[1])
+		self.this_corner_coord = (event.x, event.y)
 
 		prevw = self.imagePhoto.width()
 		prevh = self.imagePhoto.height()
 
 		#click-drag selection
 		if self.shift_pressed:
-			move = [delta[0], delta[1]]
-			move[0] = max(self.selection_tl_x + move[0], 0) - self.selection_tl_x
-			move[0] = min(self.selection_br_x + move[0], prevw) - self.selection_br_x
-			move[1] = max(self.selection_tl_y + move[1], 0) - self.selection_tl_y
-			move[1] = min(self.selection_br_y + move[1], prevw) - self.selection_br_y
-			self.selection_tl_x += move[0]
-			self.selection_tl_y += move[1]
-			self.selection_br_x += move[0]
-			self.selection_br_y += move[1]
-		else:
-			self.selection_tl_x = min(self.mouse_down_coord[0], event.x)
-			self.selection_tl_y = min(self.mouse_down_coord[1], event.y)
-			self.selection_br_x = max(self.mouse_down_coord[0], event.x) + 1
-			self.selection_br_y = max(self.mouse_down_coord[1], event.y) + 1
+			self.opposite_corner_coord = (self.opposite_corner_coord[0] + delta[0], self.opposite_corner_coord[1] + delta[1])
 
 		self.x = event.x
 		self.y = event.y
