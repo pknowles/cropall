@@ -1,169 +1,90 @@
-#! /usr/bin/env python
+# cropall: a tiny batch image processing app to crop pictures in less clicks
+#
+# Copyright (C) 2015-2024 Pyarelal Knowles
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#README:
-#this script needs
-#1.  python 3.x  https://www.python.org/downloads/
+
+# README:
+# this script needs
+# 1.  python 3.x  https://www.python.org/downloads/
 #               also python-tk and python-imaging-tk
-#2.  imagemagick http://www.imagemagick.org/script/binary-releases.php#windows
-#3.  both added to PATH http://stackoverflow.com/questions/6318156/adding-python-path-on-windows-7
+# 2.  imagemagick http://www.imagemagick.org/script/binary-releases.php#windows
+# 3.  both added to PATH http://stackoverflow.com/questions/6318156/adding-python-path-on-windows-7
 
-#4. If "import Image" fails below, do this...
+# 4. If "import Image" fails below, do this...
 #       install pip http://stackoverflow.com/questions/4750806/how-to-install-pip-on-windows
 #       run "pip install Pillow"
 #       or on linux install python-pillow and python-pillow-tk http://stackoverflow.com/questions/10630736/no-module-named-image-tk
 
-#you may change the below self-explanatory variables
+import os
+import sys
+import tkinter
+import logging
+from tkinter import *
+import tkinter.filedialog
+import shutil
+import pathlib
+from PIL import ImageOps
+from PIL import ImageTk
+from PIL import Image
 
-#select input images from current directory
-image_extensions = [".jpg", ".png", ".bmp"]
-
-#directory to put output images (created automatically in current directory)
-out_directory = "crops"
-
-#after cropping, will resize down until the image firs in these dimensions. set to 0 to disable
-resize_width = 1920
-resize_height = 1080
-
-#uses low resolution to show crop (real image will look better than preview)
-fast_preview = True
-
-#if the above is False, this controls how accurate the left hand preview image is
-antialiase_original_preview = True
-
-#ignores check to see if maintaining the apsect ratio perfectly is possible
-allow_fractional_size = False
-
-#selection mode: can be 'click-drag' or 'scroll'
-#scroll: you select a resizable rectangle of a fixed aspect ratio that can be resized using the scroll wheel
-#click-drag: you click at the top left corner of your selection, then drag down to the bottom-right corner and release. hold shift during dragging to move the entire selection.
-initial_selection_mode = 'scroll'
-
-#displays rule-of-third guidelines
-show_rule_of_thirds = False
-
-#color of the selection box
-selection_box_color = 'yellow'
-
-#whether the AR should be fixed by default
-default_fix_ratio = True
-
-
-
-
-
-def pause():
-	raw_input("Press Enter to continue...")
-
-try:
-	import os, sys
-	print(sys.version)
-
-	from distutils import spawn
-	convert_path = spawn.find_executable("convert")
-	if convert_path:
-		print("Found 'convert' at", convert_path)
-	else:
-		raise EnvironmentError("Could not find ImageMagick's 'convert'. Is it installed and in PATH?")
-
-	print("Importing libraries...")
-
-	print("> Tkinter")
-	import tkinter
-	from tkinter import *
-	from tkinter import Frame
-	print("> subprocess")
-	import subprocess
-	print("> tkinter.filedialog")
-	import tkinter.filedialog
-	print("> shutil")
-	import shutil
-	print("> Image")
-	try:
-		from PIL import Image
-	except ImportError:
-		import Image
-	print("> ImageOps")
-	try:
-		from PIL import ImageOps
-	except ImportError:
-		import ImageOps
-	print("> ImageTk")
-	try:
-		from PIL import ImageTk
-	except ImportError:
-		import ImageTk
-	print("Done")
-except Exception as e:
-	#because windows closes the window
-	print(e)
-	pause()
-	raise e
-
-if resize_height == 0:
-	resize_width = 0
-if resize_width < -1 or resize_height < -1:
-	print("Note: resize is invalid. Not resizing.")
-	pause()
-	resize_width = 0
+logger = logging.getLogger("cropall")
+logger.addHandler(logging.StreamHandler(stream=sys.stdout))
 
 def clamp(x, a, b):
 	return min(max(x, a), b)
 
-# open a SPIDER image and convert to byte format
-#im = Image.open(allImages[0])
-#im = im.resize((250, 250), Image.LANCZOS)
-
-#root = Tkinter.Tk()
-# A root window for displaying objects
-
-# Convert the Image object into a TkPhoto object
-#tkimage = ImageTk.PhotoImage(im)
-
-#Tkinter.Label(root, image=tkimage).pack()
-# Put it in the display window
-
-class MyApp(Tk):
+class App(Tk):
 	def getImages(self, dir):
-		print("Scanning " + dir)
+		print("Scanning ", dir)
 		allImages = []
 		for i in os.listdir(dir):
 			b, e = os.path.splitext(i)
-			if e.lower() not in image_extensions: continue
+			if e.lower() not in self.args.extensions: continue
 			allImages += [i]
 		return allImages
 
-	def __init__(self):
-		Tk.__init__(self)
+	def __init__(self, args, cropper):
+		super().__init__()
+		self.args = args
+		self.cropper = cropper
+
+		if self.args.width < -1 or self.args.height < -1:
+			raise ValueError("Resize value is invalid")
 
 		self.wm_title("cropall")
 
-		# Try directory given on the command line or the current directory
-		if len(sys.argv) > 1:
-			self.inDir = sys.argv[1]
-		else:
-			self.inDir = os.getcwd()
+		self.inDir = self.args.input_folder[0]
 
 		infiles = self.getImages(self.inDir)
 
 		# If that didn't work, show a browse dialogue
 		if not len(infiles):
 			print("No images in the current directory. Please select a different directory.")
-			self.inDir = tkinter.filedialog.askdirectory(parent=self, initialdir="/",title='Please select a directory')
+			self.inDir = tkinter.filedialog.askdirectory(parent=self, initialdir=self.inDir,title='Please select a directory')
 			if not len(self.inDir):
-				print("No directory selected. Exiting.")
-				pause()
-				raise SystemExit()
-			self.inDir = os.path.normpath(self.inDir)
+				raise ValueError("No directory selected. Exiting.")
+			self.inDir = pathlib.Path(os.path.normpath(self.inDir))
 			infiles = self.getImages(self.inDir)
 			if not len(infiles):
-				print("No images found in " + self.inDir + ". Exiting.")
-				pause()
-				raise SystemExit()
+				raise RuntimeError("No images found in " + self.inDir + ". Exiting.")
 			print("Found", len(infiles), "images")
 		else:
 			print("Found", len(infiles), "images in the current directory")
 
-		self.outDir = os.path.join(self.inDir, out_directory)
+		self.outDir = self.inDir / self.args.output
 
 		if not os.path.exists(self.outDir):
 			print("Creating output directory, " + self.outDir)
@@ -194,23 +115,13 @@ class MyApp(Tk):
 
 		self.shift_pressed = False
 
-		#self.main = ScrolledCanvas(self)
-		#self.main.grid(row=0, column=0, sticky='nsew')
-		#self.c = self.main.canv
-
-		#self.frame = Frame(self)
-		#self.frame.grid(row=0, column=0, sticky='nsew')
-		#self.frame.grid_rowconfigure(0, weight=1)
-		#self.frame.grid_columnconfigure(0, weight=1)
-		#self.c = Canvas(self.frame, bd=0, highlightthickness=0, background='black')
-		#self.c.grid(row=0, column=0, sticky='nsew', padx=4, pady=4)
-
 		self.controls = Frame(self)
 		self.controls.grid(row=1, column=0, columnspan=2, sticky="nsew")
 		self.buttons = []
+		selection_mode_options = ('click-drag', 'scroll')
 		self.selection_mode = StringVar()
-		self.selection_mode.set(initial_selection_mode)
-		self.selection_mode_dropdown = OptionMenu(self.controls, self.selection_mode, 'click-drag', 'scroll')
+		self.selection_mode.set(self.args.select_mode)
+		self.selection_mode_dropdown = OptionMenu(self.controls, self.selection_mode, args.select_mode, *selection_mode_options)
 		self.selection_mode_dropdown.grid(row=0, column=0, sticky="nsew")
 
 		self.inputs = []
@@ -249,8 +160,8 @@ class MyApp(Tk):
 		self.previewLabel = Label(self, relief=FLAT, borderwidth=0)
 		self.previewLabel.grid(row=0, column=1, sticky='nw', padx=0, pady=0)
 
-		self.restrictSizes.set(0 if allow_fractional_size else 1)
-		self.restrictRatio.set(1 if default_fix_ratio else 0)
+		self.restrictSizes.set(0 if self.args.allow_fractional_size else 1)
+		self.restrictRatio.set(1 if self.args.fixed_aspect else 0)
 
 		self.aspect[0].trace("w", self.on_aspect_changed)
 		self.aspect[1].trace("w", self.on_aspect_changed)
@@ -417,63 +328,42 @@ class MyApp(Tk):
 		self.load_imgfile(self.files[self.current])
 
 	def copy(self):
-		c = "copy \"" + os.path.join(self.inDir, self.currentName) + "\" \"" + os.path.join(self.outDir, self.currentName) + "\""
-		print(c)
-		shutil.copy(os.path.join(self.inDir, self.currentName), os.path.join(self.outDir, self.currentName))
-		#subprocess.Popen(c, shell=True)
-		#os.system(c)
+		shutil.copy(self.inDir / self.currentName, self.outDir / self.currentName)
 		self.next()
 
 	def resize(self):
-		if not (resize_width > 0):
-			print("Error: no resize specified. Not resizing")
-			return
-		c = "convert \"" + os.path.join(self.inDir, self.currentName) + "\""
-		c += " -resize \"" + str(resize_width) + "x" + str(resize_height) + ">\""
-		c += " \"" + os.path.join(self.outDir, self.currentName) + "\""
-		print(c)
-		subprocess.Popen(c, shell=True)
-		print("Running")
-		#os.system(c)
+		self.cropper.resize(self.inDir / self.currentName, self.outDir / self.currentName)
 		self.next()
 
 	def save_next(self, event=None):
 		box = self.getRealBox()
-		c = "convert \"" + os.path.join(self.inDir, self.currentName) + "\""
-		c += " -crop " + str(box[2]-box[0]) + "x" + str(box[3]-box[1]) + "+" + str(box[0]) + "+" + str(box[1])
-		if (resize_width > 0):
-			c += " -resize \"" + str(resize_width) + "x" + str(resize_height) + ">\""
-		c += " \"" + os.path.join(self.outDir, self.currentName) + "\""
-		print(c)
-		subprocess.Popen(c, shell=True)
-		print("Running")
-		#os.system(c)
+		self.cropper.crop(self.inDir / self.currentName, self.outDir / self.currentName, box)
 		self.next()
 
 	def load_imgfile(self, filename):
 		self.currentName = filename
 		fullFilename = os.path.join(self.inDir, filename)
-		print("Loading " + fullFilename)
+		logger.info("Loading " + fullFilename)
 		img = Image.open(fullFilename)
 
 		self.imageOrig = img
 		self.imageOrigSize = (img.size[0], img.size[1])
-		print("Image is " + str(self.imageOrigSize[0]) + "x" + str(self.imageOrigSize[1]))
+		logger.info("Image is " + str(self.imageOrigSize[0]) + "x" + str(self.imageOrigSize[1]))
 
 		basewidth = 512
 		wpercent = (basewidth/float(img.size[0]))
 		hsize = int((float(img.size[1])*float(wpercent)))
-		if fast_preview:
+		if self.args.fast_preview:
 			#does NOT create a copy so self.imageOrig is the same as self.image
 			img.thumbnail((basewidth,hsize), Image.NEAREST)
 		else:
-			if antialiase_original_preview:
+			if self.args.antialiase_slow_preview:
 				img = img.resize((basewidth,hsize), Image.LANCZOS)
 			else:
 				img = img.copy()
 				img.thumbnail((basewidth,hsize), Image.NEAREST)
 		self.image = img
-		print("Resized preview")
+		logger.info("Resized preview")
 
 		#self.geometry("1024x"+str(hsize + 100))
 		self.configure(relief='flat', background='gray')
@@ -501,7 +391,7 @@ class MyApp(Tk):
 		#self.c.config(scrollregion=self.c.bbox('all'))
 
 	def test(self):
-		if not allow_fractional_size:
+		if not self.args.allow_fractional_size:
 			self.updateCropSize()
 			if int(self.cropdiv) != self.cropdiv: return False
 			w, h = self.getCropSize()
@@ -515,19 +405,19 @@ class MyApp(Tk):
 		#bbox = (widget.canvasx(bbox[0]), widget.canvasy(bbox[1]), widget.canvasx(bbox[2]), widget.canvasy(bbox[3]))
 
 		if self.item is None:
-			self.item = widget.create_rectangle(bbox, outline=selection_box_color)
+			self.item = widget.create_rectangle(bbox, outline=self.args.selection_color)
 		else:
 			widget.coords(self.item, *bbox)
 
-		if (show_rule_of_thirds):
+		if (self.args.show_guides):
 			horiz_bbox = (bbox[0], bbox[1] + (bbox[3] - bbox[1]) / 3, bbox[2], bbox[3] - (bbox[3] - bbox[1]) / 3)
 			verti_bbox = (bbox[0] + (bbox[2] - bbox[0]) / 3, bbox[1], bbox[2] - (bbox[2] - bbox[0]) / 3, bbox[3])
 			if self.horiz_aux_item is None:
-					self.horiz_aux_item = widget.create_rectangle(horiz_bbox, outline=selection_box_color)
+					self.horiz_aux_item = widget.create_rectangle(horiz_bbox, outline=self.args.selection_color)
 			else:
 					widget.coords(self.horiz_aux_item, *horiz_bbox)
 			if self.verti_aux_item is None:
-					self.verti_aux_item = widget.create_rectangle(verti_bbox, outline=selection_box_color)
+					self.verti_aux_item = widget.create_rectangle(verti_bbox, outline=self.args.selection_color)
 			else:
 					widget.coords(self.verti_aux_item, *verti_bbox)
 
@@ -537,7 +427,7 @@ class MyApp(Tk):
 			#box = tuple((int(round(v)) for v in widget.coords(self.item)))
 			box = self.getRealBox()
 			pbox = self.getPreviewBox()
-			if fast_preview:
+			if self.args.fast_preview:
 				preview = self.image.crop(pbox) # region of interest
 			else:
 				preview = self.imageOrig.crop(box) # region of interest
@@ -559,7 +449,7 @@ class MyApp(Tk):
 			self.previewPhoto = ImageTk.PhotoImage(self.preview)
 			self.previewLabel.configure(image=self.previewPhoto)
 
-			print(str(box[2]-box[0])+"x"+str(box[3]-box[1])+"+"+str(box[0])+"+"+str(box[1]))
+			logger.info(str(box[2]-box[0])+"x"+str(box[3]-box[1])+"+"+str(box[0])+"+"+str(box[1]))
 
 	def remove_focus(self, event=None):
 			self.focus()
@@ -580,8 +470,7 @@ class MyApp(Tk):
 		self.update_preview(self.imageLabel)
 
 	def on_option_changed(self, event, var1, var2):
-		global allow_fractional_size
-		allow_fractional_size = (self.restrictSizes.get() == 0)
+		self.args.allow_fractional_size = (self.restrictSizes.get() == 0)
 
 	def on_mouse_scroll(self, event):
 		if event.num == 5 or event.delta < 0:
@@ -595,13 +484,13 @@ class MyApp(Tk):
 				if self.test(): break
 		if dir == -1:
 			if self.cropIndex == 1:
-				print("At maximum")
+				logger.info("At maximum")
 				return
 			while self.cropIndex > 1:
 				self.cropIndex -= 1
 				if self.test(): break
 
-		print(self.cropIndex)
+		logger.info(self.cropIndex)
 
 		self.update_box(self.imageLabel)
 		self.update_preview(self.imageLabel)
@@ -642,6 +531,3 @@ class MyApp(Tk):
 
 	def on_shift_release(self, event):
 		self.shift_pressed = False
-
-app =  MyApp()
-app.mainloop()

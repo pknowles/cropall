@@ -1,0 +1,5 @@
+black==23.12.1
+configparser==6.0.0
+flake8==6.1.0
+Pillow==10.1.0
+tk==0.1.0
