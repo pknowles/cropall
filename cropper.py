@@ -17,8 +17,7 @@
 
 import sys
 import logging
-import subprocess
-from distutils import spawn
+import wand.image
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(stream=sys.stdout))
@@ -27,43 +26,22 @@ logger.addHandler(logging.StreamHandler(stream=sys.stdout))
 class Cropper:
     def __init__(self, args):
         self.args = args
-        self.convert_path = spawn.find_executable("convert")
-        if self.convert_path:
-            logger.info('Found ImageMagick\'s "convert" at', self.convert_path)
-        else:
-            raise EnvironmentError(
-                'Could not find ImageMagick\'s "convert". Is it installed and in PATH?'
-            )
 
     def resize(self, src_file, dst_file):
         if not (self.args.width > 0):
             logger.error("Error: no resize specified. Not resizing")
             return
-        c = 'convert "' + src_file + '"'
-        c += ' -resize "' + str(self.args.width) + "x" + str(self.args.height) + '>"'
-        c += ' "' + dst_file + '"'
-        logger.info(c)
-        subprocess.Popen(c, shell=True)
-        logger.info("Running")
-        # os.system(c)
+        with wand.image.Image(filename=src_file) as img:
+            img.transform(resize="{}x{}>".format(self.args.width, self.args.height))
+            img.save(filename=dst_file)
 
     def crop(self, src_file, dst_file, box):
-        c = 'convert "' + src_file + '"'
-        c += (
-            " -crop "
-            + str(box[2] - box[0])
-            + "x"
-            + str(box[3] - box[1])
-            + "+"
-            + str(box[0])
-            + "+"
-            + str(box[1])
-        )
-        if self.args.width > 0:
-            c += (
-                ' -resize "' + str(self.args.width) + "x" + str(self.args.height) + '>"'
+        with wand.image.Image(filename=src_file) as img:
+            img.transform(
+                crop="{}x{}+{}+{}".format(
+                    box[2] - box[0], box[3] - box[1], box[0], box[1]
+                )
             )
-        c += ' "' + dst_file + '"'
-        logger.info(c)
-        subprocess.Popen(c, shell=True)
-        logger.info("Running")
+            if self.args.width > 0:
+                img.transform(resize="{}x{}>".format(self.args.width, self.args.height))
+            img.save(filename=dst_file)

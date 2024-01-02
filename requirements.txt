@@ -3,3 +3,4 @@ configparser==6.0.0
 flake8==6.1.0
 Pillow==10.1.0
 tk==0.1.0
+Wand==0.6.13
