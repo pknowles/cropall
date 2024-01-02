@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
 import error_handler
 import argparse
 import configparser
@@ -24,7 +25,9 @@ import pathlib
 
 error_handler.activate("cropall")
 
-config_file = "cropall.ini"
+config_file = pathlib.Path("cropall.ini")
+if hasattr(sys, '_MEIPASS'):
+      config_file = pathlib.Path(sys._MEIPASS) / config_file
 config = configparser.ConfigParser()
 config.read(config_file)
 
