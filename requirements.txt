@@ -4,4 +4,5 @@ flake8==6.1.0
 Pillow==10.1.0
 pyinstaller==6.3.0
 tk==0.1.0
+ttkthemes==3.2.2
 Wand==0.6.13

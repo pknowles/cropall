@@ -33,6 +33,8 @@ import sys
 import tkinter
 import logging
 from tkinter import *
+from tkinter.ttk import *
+from ttkthemes import ThemedTk
 import tkinter.filedialog
 import shutil
 import pathlib
@@ -46,7 +48,7 @@ logger.addHandler(logging.StreamHandler(stream=sys.stdout))
 def clamp(x, a, b):
 	return min(max(x, a), b)
 
-class App(Tk):
+class App(ThemedTk):
 	def getImages(self, dir):
 		print("Scanning ", dir)
 		allImages = []
@@ -57,7 +59,8 @@ class App(Tk):
 		return allImages
 
 	def __init__(self, args, cropper):
-		super().__init__()
+		super().__init__(theme="breeze")
+
 		self.args = args
 		self.cropper = cropper
 
