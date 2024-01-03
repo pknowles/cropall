@@ -132,10 +132,6 @@ class App(ThemedTk):
 
 		self.inputs = []
 
-		self.restrictRatio = IntVar()
-		self.inputs += [Checkbutton(self.controls, text="Fix Aspect Ratio", variable=self.restrictRatio)]
-		self.inputs[-1].grid(row=0, column=1, sticky="nsew")
-
 		self.aspect = (StringVar(), StringVar())
 		self.aspect[0].set("RatioX")
 		self.aspect[1].set("RatioY")
@@ -155,9 +151,14 @@ class App(ThemedTk):
 		self.buttons += [Button(self.controls, text="Crop", command=self.save_next)]
 		self.buttons[-1].grid(row=0, column=8, sticky="nsew")
 
+		self.menubar = Menu(self)
+		self.options_menu = Menu(self.menubar)
+		self.restrictRatio = IntVar()
+		self.options_menu.add_checkbutton(label="Fix Aspect Ratio", variable=self.restrictRatio)
 		self.restrictSizes = IntVar()
-		self.inputs += [Checkbutton(self.controls, text="Perfect Pixel Ratio", variable=self.restrictSizes)]
-		self.inputs[-1].grid(row=0, column=9, sticky="nsew")
+		self.options_menu.add_checkbutton(label="Perfect Pixel Ratio", variable=self.restrictSizes)
+		self.menubar.add_cascade(label='Options', menu=self.options_menu)
+		self.config(menu=self.menubar)
 
 		self.imageLabel = Canvas(self, highlightthickness=0)
 		self.imageLabel.grid(row=0, column=0, sticky='nw', padx=0, pady=0)
