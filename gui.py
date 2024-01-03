@@ -157,6 +157,8 @@ class App(ThemedTk):
 		self.options_menu.add_checkbutton(label="Fix Aspect Ratio", variable=self.restrictRatio)
 		self.restrictSizes = IntVar()
 		self.options_menu.add_checkbutton(label="Perfect Pixel Ratio", variable=self.restrictSizes)
+		self.showGuides = IntVar()
+		self.options_menu.add_checkbutton(label="Show guides", variable=self.showGuides)
 		self.menubar.add_cascade(label='Options', menu=self.options_menu)
 		self.config(menu=self.menubar)
 
@@ -169,11 +171,13 @@ class App(ThemedTk):
 
 		self.restrictSizes.set(0 if self.args.allow_fractional_size else 1)
 		self.restrictRatio.set(1 if self.args.fixed_aspect else 0)
+		self.showGuides.set(1 if self.args.show_guides else 0)
 
 		self.aspect[0].trace("w", self.on_aspect_changed)
 		self.aspect[1].trace("w", self.on_aspect_changed)
 		self.restrictSizes.trace("w", self.on_option_changed)
 		self.restrictRatio.trace("w", self.on_aspect_changed)
+		self.showGuides.trace("w", self.on_aspect_changed)
 		self.bind('<space>', self.save_next)
 		self.bind('d', self.next)
 		self.bind('a', self.previous)
@@ -416,7 +420,7 @@ class App(ThemedTk):
 		else:
 			widget.coords(self.item, *bbox)
 
-		if (self.args.show_guides):
+		if (self.showGuides.get() == 1):
 			horiz_bbox = (bbox[0], bbox[1] + (bbox[3] - bbox[1]) / 3, bbox[2], bbox[3] - (bbox[3] - bbox[1]) / 3)
 			verti_bbox = (bbox[0] + (bbox[2] - bbox[0]) / 3, bbox[1], bbox[2] - (bbox[2] - bbox[0]) / 3, bbox[3])
 			if self.horiz_aux_item is None:
@@ -427,6 +431,13 @@ class App(ThemedTk):
 					self.verti_aux_item = widget.create_rectangle(verti_bbox, outline=self.args.selection_color)
 			else:
 					widget.coords(self.verti_aux_item, *verti_bbox)
+		else:
+			if self.horiz_aux_item:
+				widget.delete(self.horiz_aux_item)
+				self.horiz_aux_item = None
+			if self.verti_aux_item:
+				widget.delete(self.verti_aux_item)
+				self.verti_aux_item = None
 
 	def update_preview(self, widget):
 		if self.item:
