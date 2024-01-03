@@ -80,6 +80,7 @@ class App(ThemedTk):
 		# If that didn't work, show a browse dialogue
 		if not len(infiles):
 			print("No images in the current directory. Please select a different directory.")
+			self.lift()
 			self.inDir = tkinter.filedialog.askdirectory(parent=self, initialdir=self.inDir,title='Please select a directory')
 			if not len(self.inDir):
 				raise ValueError("No directory selected. Exiting.")
