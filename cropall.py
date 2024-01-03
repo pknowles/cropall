@@ -26,8 +26,8 @@ import pathlib
 error_handler.activate("cropall")
 
 config_file = pathlib.Path("cropall.ini")
-if hasattr(sys, '_MEIPASS'):
-      config_file = pathlib.Path(sys._MEIPASS) / config_file
+if hasattr(sys, "_MEIPASS"):
+    config_file = pathlib.Path(sys._MEIPASS) / config_file
 config = configparser.ConfigParser()
 config.read(config_file)
 
@@ -120,8 +120,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     import cropper
+
     cropper = cropper.Cropper(args)
 
     import gui
+
     app = gui.App(args, cropper)
     app.mainloop()
