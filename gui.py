@@ -212,9 +212,9 @@ class App(Tk):
 		aspect_sign = -1 if (w*h < 0) else 1 # to determine whether this corner's x and y are on the same side of the other corner's x and y or not
 
 		# aspect ratio correction
-		if (abs(float(w)/float(h)) > self.aspectRatio): # box is too wide -> increase height to match aspect
+		if h != 0 and (abs(float(w)/float(h)) > self.aspectRatio): # box is too wide -> increase height to match aspect
 			this_corner_image = (this_corner_image[0], opposite_corner_image[1] + aspect_sign * w / self.aspectRatio)
-		if (abs(float(w)/float(h)) < self.aspectRatio): # box is too high -> increase width to match aspect
+		if h != 0 and (abs(float(w)/float(h)) < self.aspectRatio): # box is too high -> increase width to match aspect
 			this_corner_image = (opposite_corner_image[0] + aspect_sign * h * self.aspectRatio, this_corner_image[1])
 		return this_corner_image, opposite_corner_image
 
@@ -435,7 +435,7 @@ class App(Tk):
 			#add black borders for correct aspect ratio
 			#if preview.size[0] > 512:
 			preview.thumbnail(self.image.size, Image.LANCZOS) #downscale to preview rez
-			paspect = preview.size[0]/float(preview.size[1])
+			paspect = 1 if preview.size[1] == 0 else preview.size[0]/float(preview.size[1])
 			aspect = self.image.size[0]/float(self.image.size[1])
 			if paspect < aspect:
 				bbox = (0, 0, int(preview.size[1] * aspect), preview.size[1])
