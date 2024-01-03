@@ -69,6 +69,10 @@ class App(ThemedTk):
 
 		self.wm_title("cropall")
 
+		# Initial size based on screen dpi
+		dpi = self.winfo_fpixels('1i')
+		self.geometry("{}x{}".format(int(dpi*16), int(dpi*8)))
+
 		self.inDir = self.args.input_folder[0]
 
 		infiles = self.getImages(self.inDir)
@@ -97,8 +101,6 @@ class App(ThemedTk):
 
 		self.grid_rowconfigure(0, weight=1)
 		self.grid_columnconfigure(0, weight=1)
-		self.geometry("1024x512")
-		#self.resizable(0,0)
 
 		self.files = infiles
 
