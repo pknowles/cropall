@@ -20,7 +20,6 @@ import logging
 import wand.image
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler(stream=sys.stdout))
 
 
 class Cropper:

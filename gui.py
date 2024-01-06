@@ -32,6 +32,8 @@ import os
 import sys
 import tkinter
 import logging
+import box
+import numpy as np
 from tkinter import *
 from tkinter.ttk import *
 from ttkthemes import ThemedTk
@@ -43,7 +45,7 @@ from PIL import ImageTk
 from PIL import Image
 
 logger = logging.getLogger("cropall")
-logger.addHandler(logging.StreamHandler(stream=sys.stdout))
+logger.setLevel(logging.DEBUG)
 
 
 def clamp(x, a, b):
@@ -52,7 +54,7 @@ def clamp(x, a, b):
 
 class App(ThemedTk):
     def getImages(self, dir):
-        print("Scanning ", dir)
+        logger.info("Scanning {}".format(dir))
         allImages = []
         for i in os.listdir(dir):
             b, e = os.path.splitext(i)
@@ -82,7 +84,7 @@ class App(ThemedTk):
 
         # If that didn't work, show a browse dialogue
         if not len(infiles):
-            print(
+            logger.warning(
                 "No images in the current directory. Please select a different directory."
             )
             self.lift()
@@ -95,35 +97,38 @@ class App(ThemedTk):
             infiles = self.getImages(self.inDir)
             if not len(infiles):
                 raise RuntimeError("No images found in " + self.inDir + ". Exiting.")
-            print("Found", len(infiles), "images")
+            logger.info("Found {} images".format(len(infiles)))
         else:
-            print("Found", len(infiles), "images in the current directory")
+            logger.info("Found {} images in the current directory".format(len(infiles)))
 
         self.outDir = self.inDir / self.args.output
 
         if not os.path.exists(self.outDir):
-            print("Creating output directory, " + self.outDir)
+            logger.info("Creating output directory, " + self.outDir)
             os.makedirs(self.outDir)
 
-        print("Initializing GUI")
+        logger.info("Initializing GUI")
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         self.files = infiles
 
+        self.image_orig = None
+        self.image = None
+        self.delayed_resize_id = None
         self.preview = None
 
-        self.item = None
+        self.displayed_crop_rectangle = None
+        self.verti_aux_item = None
+        self.horiz_aux_item = None
 
-        # "click-drag" selection corners
-        self.opposite_corner_coord = (0, 0)
-        self.this_corner_coord = (0, 0)
+        # "click-drag" selection rectangle
+        self.mouse_position = box.Size2D(0, 0)
+        self.mouse_selection = box.Box2D(box.Size2D(0, 0), box.Size2D(1, 1))
 
         # "scroll" selection center and crop index
-        self.cropIndex = 2
-        self.x = 0
-        self.y = 0
+        self.scroll_crop_width = 1
         self.current = 0
 
         self.shift_pressed = False
@@ -144,12 +149,12 @@ class App(ThemedTk):
 
         self.inputs = []
 
-        self.aspect = (StringVar(), StringVar())
-        self.aspect[0].set("RatioX")
-        self.aspect[1].set("RatioY")
-        self.inputs += [Entry(self.controls, textvariable=self.aspect[0])]
+        self.aspect_vars = (StringVar(), StringVar())
+        self.aspect_vars[0].set(3)
+        self.aspect_vars[1].set(2)
+        self.inputs += [Entry(self.controls, textvariable=self.aspect_vars[0])]
         self.inputs[-1].grid(row=0, column=2, sticky="nsew")
-        self.inputs += [Entry(self.controls, textvariable=self.aspect[1])]
+        self.inputs += [Entry(self.controls, textvariable=self.aspect_vars[1])]
         self.inputs[-1].grid(row=0, column=3, sticky="nsew")
 
         self.buttons += [Button(self.controls, text="Prev", command=self.previous)]
@@ -176,9 +181,9 @@ class App(ThemedTk):
         self.showGuides = IntVar()
         self.options_menu.add_checkbutton(label="Show guides", variable=self.showGuides)
         self.menubar.add_cascade(label="Options", menu=self.options_menu)
-        self.config(menu=self.menubar)
+        self.configure(relief="flat", background="gray", menu=self.menubar)
 
-        self.imageLabel = Canvas(self, highlightthickness=0)
+        self.imageLabel = Canvas(self, highlightthickness=0, bg="grey")
         self.imageLabel.grid(row=0, column=0, sticky="nw", padx=0, pady=0)
         self.c = self.imageLabel
 
@@ -189,18 +194,19 @@ class App(ThemedTk):
         self.restrictRatio.set(1 if self.args.fixed_aspect else 0)
         self.showGuides.set(1 if self.args.show_guides else 0)
 
-        self.aspect[0].trace("w", self.on_aspect_changed)
-        self.aspect[1].trace("w", self.on_aspect_changed)
+        self.aspect_vars[0].trace("w", self.on_aspect_changed)
+        self.aspect_vars[1].trace("w", self.on_aspect_changed)
         self.restrictSizes.trace("w", self.on_option_changed)
         self.restrictRatio.trace("w", self.on_aspect_changed)
         self.showGuides.trace("w", self.on_aspect_changed)
+        self.selection_mode.trace("w", self.on_aspect_changed)
+        self.bind("<Configure>", self.on_resize)
         self.bind("<space>", self.save_next)
         self.bind("d", self.next)
         self.bind("a", self.previous)
-        self.c.bind("<ButtonPress-1>", self.on_mouse_down)
-        self.c.bind("<B1-Motion>", self.on_mouse_drag)
-        self.c.bind("<ButtonRelease-1>", self.on_mouse_up)
-        # self.c.bind('<Button-3>', self.on_right_click)
+        self.imageLabel.bind("<ButtonPress-1>", self.on_mouse_down)
+        self.imageLabel.bind("<B1-Motion>", self.on_mouse_drag)
+        self.imageLabel.bind("<ButtonRelease-1>", self.on_mouse_up)
         self.bind("<KeyPress-Shift_L>", self.on_shift_press)
         self.bind("<KeyRelease-Shift_L>", self.on_shift_release)
         self.bind("<Escape>", self.remove_focus)
@@ -208,204 +214,69 @@ class App(ThemedTk):
         self.bind("<Button-5>", self.on_mouse_scroll)
         self.bind("<MouseWheel>", self.on_mouse_scroll)
 
-        print("Checking for existing crops")
-        # self.load_imgfile(allImages[0])
+        logger.warning("Checking for existing crops")
         self.current = 0
         while self.current < len(self.files) and os.path.exists(
             os.path.join(self.outDir, self.files[self.current])
         ):
-            print("Skipping " + self.files[self.current] + ". Already cropped.")
+            logger.warning("Skipping " + self.files[self.current] + ". Already cropped.")
             self.current += 1
+
+        # Trigger a resize to set self.display_area
+        self.display_area = box.Size2D(-1, -1)
+        self.update()
+
+        # Load the first image
         self.current += 1
         self.previous()
 
-    def updateCropSize(self):
-        if self.cropIndex <= 4:
-            self.cropdiv = 8.0 / (9.0 - self.cropIndex)
-        else:
-            self.cropdiv = 1 + (self.cropIndex - 1) * 0.25
-
-    def getCropSize(self):
-        self.updateCropSize()
-        h = int(self.imageOrigSize[1] / self.cropdiv)
-        w = int(self.imageOrigSize[1] * self.aspectRatio / self.cropdiv)
-        if w > self.imageOrigSize[0]:
-            w = int(self.imageOrigSize[0] / self.cropdiv)
-            h = int(self.imageOrigSize[0] / (self.cropdiv * self.aspectRatio))
-        # w = int(self.imageOrigSize[0] / self.cropdiv)
-        return w, h
-
-    def correct_ar(self, this_corner_image, opposite_corner_image):
-        w = this_corner_image[0] - opposite_corner_image[0]
-        h = this_corner_image[1] - opposite_corner_image[1]
-        aspect_sign = (
-            -1 if (w * h < 0) else 1
-        )  # to determine whether this corner's x and y are on the same side of the other corner's x and y or not
-
-        # aspect ratio correction
-        if h != 0 and (
-            abs(float(w) / float(h)) > self.aspectRatio
-        ):  # box is too wide -> increase height to match aspect
-            this_corner_image = (
-                this_corner_image[0],
-                opposite_corner_image[1] + aspect_sign * w / self.aspectRatio,
+    def aspect(self):
+        try:
+            return box.Size2D(
+                max(1, int(self.aspect_vars[0].get())),
+                max(1, int(self.aspect_vars[1].get())),
             )
-        if h != 0 and (
-            abs(float(w) / float(h)) < self.aspectRatio
-        ):  # box is too high -> increase width to match aspect
-            this_corner_image = (
-                opposite_corner_image[0] + aspect_sign * h * self.aspectRatio,
-                this_corner_image[1],
-            )
-        return this_corner_image, opposite_corner_image
+        except ValueError:
+            return box.Size2D(1, 1)
 
-    def getRealBox(self):
-        imw = self.imageOrigSize[0]
-        imh = self.imageOrigSize[1]
-        prevw = self.imagePhoto.width()
-        prevh = self.imagePhoto.height()
+    def scroll_crop_size(self):
+        aspect = self.aspect()
+        return (
+            self.scroll_crop_width,
+            (self.scroll_crop_width * aspect[1]) / aspect[0],
+        )
+
+    def image_crop_box(self):
+        "Returns the crop box for the original image"
+        image_box = box.Box2D.scale_down(self.image_size, self.image_area)
 
         if self.selection_mode.get() == "click-drag":
-            this_corner_image = (
-                self.this_corner_coord[0] * imw / prevw,
-                self.this_corner_coord[1] * imh / prevh,
+            image_mouse_box = (self.mouse_selection - image_box).scaled(
+                image_box.size, self.image_size
             )
-            opposite_corner_image = (
-                self.opposite_corner_coord[0] * imw / prevw,
-                self.opposite_corner_coord[1] * imh / prevh,
-            )
-
-            w = this_corner_image[0] - opposite_corner_image[0]
-            h = this_corner_image[1] - opposite_corner_image[1]
-
             if self.restrictRatio.get() == 1:
-                if (
-                    self.shift_pressed
-                ):  # never resize box when shift is pressed. only force it inside bounds.
-                    this_corner_image, opposite_corner_image = self.correct_ar(
-                        this_corner_image, opposite_corner_image
-                    )
-                    w = this_corner_image[0] - opposite_corner_image[0]
-                    h = this_corner_image[1] - opposite_corner_image[1]
-
-                    move_toright = 0 - min(
-                        this_corner_image[0], opposite_corner_image[0]
-                    )
-                    move_toleft = (
-                        max(this_corner_image[0], opposite_corner_image[0]) - imw
-                    )
-                    move_x = (
-                        move_toright
-                        if (move_toright > 0)
-                        else (-move_toleft if (move_toleft > 0) else 0)
-                    )
-
-                    move_down = 0 - min(this_corner_image[1], opposite_corner_image[1])
-                    move_up = max(this_corner_image[1], opposite_corner_image[1]) - imh
-                    move_y = (
-                        move_down
-                        if (move_down > 0)
-                        else (-move_up if (move_up > 0) else 0)
-                    )
-
-                    this_corner_image = (
-                        this_corner_image[0] + move_x,
-                        this_corner_image[1] + move_y,
-                    )
-                    opposite_corner_image = (
-                        opposite_corner_image[0] + move_x,
-                        opposite_corner_image[1] + move_y,
-                    )
-
-                else:  # shift is not pressed, check AR
-                    opposite_corner_image = (
-                        max(min(opposite_corner_image[0], imw), 0),
-                        max(min(opposite_corner_image[1], imh), 0),
-                    )
-                    self.opposite_corner_coord = (
-                        max(min(self.opposite_corner_coord[0], prevw), 0),
-                        max(min(self.opposite_corner_coord[1], prevh), 0),
-                    )
-
-                    this_corner_image, opposite_corner_image = self.correct_ar(
-                        this_corner_image, opposite_corner_image
-                    )
-                    w = this_corner_image[0] - opposite_corner_image[0]
-                    h = this_corner_image[1] - opposite_corner_image[1]
-
-                    # bounds correction
-                    # left
-                    if this_corner_image[0] < 0:
-                        correction = opposite_corner_image[0] / float(-w)
-                        h = h * correction
-                        this_corner_image = (0, opposite_corner_image[1] + h)
-                        w = this_corner_image[0] - opposite_corner_image[0]
-
-                    # top
-                    if this_corner_image[1] < 0:
-                        correction = opposite_corner_image[1] / float(-h)
-                        w = w * correction
-                        this_corner_image = (opposite_corner_image[0] + w, 0)
-                        h = this_corner_image[1] - opposite_corner_image[1]
-
-                    # bottom
-                    if this_corner_image[1] > imh:
-                        correction = (imh - opposite_corner_image[1]) / float(h)
-                        w = w * correction
-                        this_corner_image = (opposite_corner_image[0] + w, imh)
-                        h = this_corner_image[1] - opposite_corner_image[1]
-
-                    # right
-                    if this_corner_image[0] > imw:
-                        correction = (imw - opposite_corner_image[0]) / float(w)
-                        h = h * correction
-                        this_corner_image = (imw, opposite_corner_image[1] + h)
-                        w = this_corner_image[0] - opposite_corner_image[0]
-
-                    this_corner_image = (
-                        int(round(this_corner_image[0])),
-                        int(round(this_corner_image[1])),
-                    )
-
-            else:  # no fixed AR
-                # bounds check
-                this_corner_image = (
-                    max(min(this_corner_image[0], imw), 0.0),
-                    max(min(this_corner_image[1], imh), 0.0),
-                )
-
-            box = (
-                min(this_corner_image[0], opposite_corner_image[0]),
-                min(this_corner_image[1], opposite_corner_image[1]),
-                max(this_corner_image[0], opposite_corner_image[0]),
-                max(this_corner_image[1], opposite_corner_image[1]),
+                region = box.Box2D.cover(self.aspect(), image_mouse_box.size, False)
+                region.offset += image_mouse_box.offset
+                box.Box2D
+                return region.positive_size()
+            else:
+                return image_mouse_box.positive_size()
+        else:
+            # scroll to change size
+            region = box.Box2D(
+                ((self.mouse_position - image_box.offset) * self.image_size)
+                / image_box.size,
+                self.scroll_crop_size(),
             )
+            region.offset -= (region.size / 2).astype(int)
+            return region.clamped(self.image_size)
 
-        else:  # traditional (scroll) selection
-            w, h = self.getCropSize()
-            box = (
-                int(round(self.x * imw / prevw)) - w // 2,
-                int(round(self.y * imh / prevh)) - h // 2,
-            )
-            box = (max(box[0], 0), max(box[1], 0))
-            box = (min(box[0] + w, imw) - w, min(box[1] + h, imh) - h)
-            box = (box[0], box[1], box[0] + w, box[1] + h)
-
-        return box
-
-    def getPreviewBox(self):
-        imw = self.imageOrigSize[0]
-        imh = self.imageOrigSize[1]
-        prevw = self.imagePhoto.width()
-        prevh = self.imagePhoto.height()
-        bbox = self.getRealBox()
-        bbox = (
-            bbox[0] * prevw / imw,
-            bbox[1] * prevh / imh,
-            bbox[2] * prevw / imw,
-            bbox[3] * prevh / imh,
-        )
-        return (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
+    def displayed_crop_box(self):
+        "Returns the crop box for the possibly-scaled displayed image, relative to the image_box area, not the whole image_area"
+        image_box = box.Box2D.scale_down(self.image_size, self.image_area)
+        orig_crop = self.image_crop_box()
+        display_crop = orig_crop.scaled(self.image_size, image_box.size)
+        return display_crop
 
     def previous(self, event=None):
         self.current -= 1
@@ -428,9 +299,11 @@ class App(ThemedTk):
         self.next()
 
     def save_next(self, event=None):
-        box = self.getRealBox()
+        box = self.image_crop_box()
         self.cropper.crop(
-            self.inDir / self.currentName, self.outDir / self.currentName, box
+            self.inDir / self.currentName,
+            self.outDir / self.currentName,
+            box.coords().tolist(),
         )
         self.next()
 
@@ -438,92 +311,78 @@ class App(ThemedTk):
         self.currentName = filename
         fullFilename = os.path.join(self.inDir, filename)
         logger.info("Loading " + fullFilename)
-        img = Image.open(fullFilename)
-
-        self.imageOrig = img
-        self.imageOrigSize = (img.size[0], img.size[1])
+        self.image_orig = Image.open(fullFilename)
+        self.image_size = box.Size2D(self.image_orig.size[0], self.image_orig.size[1])
         logger.info(
-            "Image is " + str(self.imageOrigSize[0]) + "x" + str(self.imageOrigSize[1])
+            "Image is " + str(self.image_size[0]) + "x" + str(self.image_size[1])
         )
 
-        basewidth = 512
-        wpercent = basewidth / float(img.size[0])
-        hsize = int((float(img.size[1]) * float(wpercent)))
+        # Initialize scroll cropping
+        image_box = box.Box2D.scale_down(self.image_size, self.image_area)
+        self.scroll_crop_width = self.image_size[0] // 2
+        self.inc_scroll_crop()
+        self.mouse_position = (self.image_area / 2).astype(int)
+        self.mouse_selection = self.displayed_crop_box() + image_box
+
+        self.update_image_display()
+        self.update_selection_box(self.imageLabel)
+        self.update_preview(self.imageLabel)
+
+    def update_image_display(self):
+        if not self.image_orig:
+            return
+
+        image_box = box.Box2D.scale_down(self.image_size, self.image_area)
         if self.args.fast_preview:
-            # does NOT create a copy so self.imageOrig is the same as self.image
-            img.thumbnail((basewidth, hsize), Image.NEAREST)
+            # does NOT create a copy so self.image_orig is the same as self.image
+            self.image = self.image_orig.copy()
+            self.image.thumbnail(image_box.size, Image.NEAREST)
         else:
             if self.args.antialiase_slow_preview:
-                img = img.resize((basewidth, hsize), Image.LANCZOS)
+                self.image = self.image_orig.resize(image_box.size, Image.LANCZOS)
             else:
-                img = img.copy()
-                img.thumbnail((basewidth, hsize), Image.NEAREST)
-        self.image = img
+                self.image = self.image_orig.copy()
+                self.image.thumbnail(image_box.size, Image.NEAREST)
         logger.info("Resized preview")
 
-        # self.geometry("1024x"+str(hsize + 100))
-        self.configure(relief="flat", background="gray")
-
         self.imagePhoto = ImageTk.PhotoImage(self.image)
-        self.imageLabel.configure(
-            width=self.imagePhoto.width(), height=self.imagePhoto.height()
+        self.imageLabel.configure(width=self.image_area[0], height=self.image_area[1])
+        canva_image = self.imageLabel.create_image(
+            image_box.offset[0], image_box.offset[1], anchor=NW, image=self.imagePhoto
         )
-        self.imageLabel.create_image(0, 0, anchor=NW, image=self.imagePhoto)
+        self.imageLabel.tag_lower(canva_image)
 
-        self.previewPhoto = ImageTk.PhotoImage(self.image)
-        self.previewLabel.configure(image=self.previewPhoto)
-
-        self.item = None
-
-        self.verti_aux_item = None
-        self.horiz_aux_item = None
-
-        self.on_aspect_changed(
-            None, None, None
-        )  # update aspect ratio with new image size
-
-        # self.imageLabel.pack(side = "left", fill = "both", expand = "yes")
-        # self.previewLabel.pack(side = "left", fill = "both", expand = "yes")
-        # self.c.pack(side = "bottom", fill = "both", expand = "yes")
-
-        # self.c.xview_moveto(0)
-        # self.c.yview_moveto(0)
-        # self.c.config(scrollregion=self.c.bbox('all'))
-
-    def test(self):
+    def test_fractional_size(self):
         if not self.args.allow_fractional_size:
-            self.updateCropSize()
-            if int(self.cropdiv) != self.cropdiv:
-                return False
-            w, h = self.getCropSize()
+            (w, h) = self.scroll_crop_size()
             if int(h) != h or int(w) != w:
                 return False
-            # if self.imageOrigSize[1] % int(self.cropdiv) != 0: return False
-            # if self.imageOrigSize[0] % int(self.cropdiv) != 0: return False
         return True
 
-    def update_box(self, widget):
-        bbox = self.getPreviewBox()
-        # bbox = (widget.canvasx(bbox[0]), widget.canvasy(bbox[1]), widget.canvasx(bbox[2]), widget.canvasy(bbox[3]))
+    def update_selection_box(self, widget):
+        if not self.image or self.image_area[0] == 0:
+            return
 
-        if self.item is None:
-            self.item = widget.create_rectangle(bbox, outline=self.args.selection_color)
+        image_box = box.Box2D.scale_down(self.image_size, self.image_area)
+        selection_box = self.displayed_crop_box() + image_box
+        if self.displayed_crop_rectangle is None:
+            self.displayed_crop_rectangle = widget.create_rectangle(
+                selection_box.coords().tolist(), outline=self.args.selection_color
+            )
         else:
-            widget.coords(self.item, *bbox)
+            widget.coords(
+                self.displayed_crop_rectangle, *selection_box.coords().tolist()
+            )
 
         if self.showGuides.get() == 1:
-            horiz_bbox = (
-                bbox[0],
-                bbox[1] + (bbox[3] - bbox[1]) / 3,
-                bbox[2],
-                bbox[3] - (bbox[3] - bbox[1]) / 3,
-            )
-            verti_bbox = (
-                bbox[0] + (bbox[2] - bbox[0]) / 3,
-                bbox[1],
-                bbox[2] - (bbox[2] - bbox[0]) / 3,
-                bbox[3],
-            )
+            verti_bbox = selection_box.copy()
+            verti_bbox.offset[0] += verti_bbox.size[0] / 3
+            verti_bbox.size[0] /= 3
+            verti_bbox = verti_bbox.coords().tolist()
+            horiz_bbox = selection_box.copy()
+            horiz_bbox.offset[1] += horiz_bbox.size[1] / 3
+            horiz_bbox.size[1] /= 3
+            horiz_bbox = horiz_bbox.coords().tolist()
             if self.horiz_aux_item is None:
                 self.horiz_aux_item = widget.create_rectangle(
                     horiz_bbox, outline=self.args.selection_color
@@ -545,135 +404,115 @@ class App(ThemedTk):
                 self.verti_aux_item = None
 
     def update_preview(self, widget):
-        if self.item:
-            # get a crop for the preview
-            # box = tuple((int(round(v)) for v in widget.coords(self.item)))
-            box = self.getRealBox()
-            pbox = self.getPreviewBox()
-            if self.args.fast_preview:
-                preview = self.image.crop(pbox)  # region of interest
-            else:
-                preview = self.imageOrig.crop(box)  # region of interest
+        if not self.image or self.image_area[0] == 0:
+            return
 
-            # add black borders for correct aspect ratio
-            # if preview.size[0] > 512:
-            preview.thumbnail(
-                self.image.size, Image.LANCZOS
-            )  # downscale to preview rez
-            paspect = (
-                1 if preview.size[1] == 0 else preview.size[0] / float(preview.size[1])
-            )
-            aspect = self.image.size[0] / float(self.image.size[1])
-            if paspect < aspect:
-                bbox = (0, 0, int(preview.size[1] * aspect), preview.size[1])
-            else:
-                bbox = (0, 0, preview.size[0], int(preview.size[0] / aspect))
-            preview = ImageOps.expand(
-                preview,
-                border=(
-                    (bbox[2] - preview.size[0]) // 2,
-                    (bbox[3] - preview.size[1]) // 2,
-                ),
-            )
-            # preview = ImageOps.fit(preview, size=self.image.size, method=Image.LANCZOS, bleed=-10.0)
+        # get a crop for the preview
+        if self.args.fast_preview:
+            preview = self.image.crop(self.displayed_crop_box().coords().tolist())
+        else:
+            preview = self.image_orig.crop(self.image_crop_box().coords().tolist())
 
-            # resize to preview rez (if too small)
-            self.preview = preview.resize(self.image.size, Image.LANCZOS)
-            self.previewPhoto = ImageTk.PhotoImage(self.preview)
-            self.previewLabel.configure(image=self.previewPhoto)
+        # Resize and letterbox
+        preview_box = box.Box2D.contain(preview.size, self.preview_area)
+        preview = preview.resize(preview_box.size, Image.LANCZOS)
+        preview = ImageOps.expand(
+            preview, border=tuple(preview_box.offset), fill=(100, 100, 100)
+        )
+        self.preview = preview
 
-            logger.info(
-                str(box[2] - box[0])
-                + "x"
-                + str(box[3] - box[1])
-                + "+"
-                + str(box[0])
-                + "+"
-                + str(box[1])
-            )
+        self.previewPhoto = ImageTk.PhotoImage(self.preview)
+        self.previewLabel.configure(image=self.previewPhoto)
 
     def remove_focus(self, event=None):
         self.focus()
 
+    def on_resize(self, event):
+        new_display_area = box.Size2D(self.winfo_width(), self.winfo_height())
+        if np.array_equal(self.display_area, new_display_area):
+            return
+
+        logger.info("Resize window {}x{}".format(*new_display_area))
+        self.display_area = new_display_area
+        self.image_area = self.display_area.copy()
+        self.preview_area = self.display_area.copy()
+        self.image_area[0] /= 2
+        self.preview_area[0] -= self.image_area[0]
+        self.update_selection_box(self.imageLabel)
+        self.update_preview(self.imageLabel)
+
+        if self.delayed_resize_id:
+            self.after_cancel(self.delayed_resize_id)
+        if self.image_orig:
+            self.delayed_resize_id = self.after(1000, self.update_image_display)
+
     def on_aspect_changed(self, event, var1, var2):
-        if self.restrictRatio.get() == 1:
-            try:
-                x = float(self.aspect[0].get())
-                y = float(self.aspect[1].get())
-                if x < 0 or y < 1:
-                    raise ZeroDivisionError()
-                self.aspectRatio = x / y
-            except (ZeroDivisionError, ValueError) as e:
-                self.aspectRatio = float(self.imageOrigSize[0]) / float(
-                    self.imageOrigSize[1]
-                )
-        else:
-            self.aspectRatio = float(self.imageOrigSize[0]) / float(
-                self.imageOrigSize[1]
-            )
-        self.update_box(self.imageLabel)
+        self.update_selection_box(self.imageLabel)
         self.update_preview(self.imageLabel)
 
     def on_option_changed(self, event, var1, var2):
         self.args.allow_fractional_size = self.restrictSizes.get() == 0
 
+    def inc_scroll_crop(self):
+        # Scroll one pixel at a time if shift is pressed. Otherwise skip a few
+        if not self.shift_pressed:
+            self.scroll_crop_width = min(
+                self.image_size[0], int(self.scroll_crop_width * 1.1)
+            )
+        while self.scroll_crop_width < self.image_size[0]:
+            self.scroll_crop_width += 1
+            if self.test_fractional_size():
+                break
+        logger.info("Crop width: {}".format(self.scroll_crop_width))
+
+    def dec_scroll_crop(self):
+        # Scroll one pixel at a time if shift is pressed. Otherwise skip a few
+        if not self.shift_pressed:
+            self.scroll_crop_width = max(1, int(self.scroll_crop_width * 0.9))
+        while self.scroll_crop_width > 1:
+            self.scroll_crop_width -= 1
+            if self.test_fractional_size():
+                break
+        logger.info("Crop width: {}".format(self.scroll_crop_width))
+
     def on_mouse_scroll(self, event):
+        changed = False
         if event.num == 5 or event.delta < 0:
-            dir = -1
+            self.inc_scroll_crop()
+            changed = True
         if event.num == 4 or event.delta > 0:
-            dir = 1
-
-        if dir == 1:
-            while self.cropIndex < self.imagePhoto.width():
-                self.cropIndex += 1
-                if self.test():
-                    break
-        if dir == -1:
-            if self.cropIndex == 1:
-                logger.info("At maximum")
-                return
-            while self.cropIndex > 1:
-                self.cropIndex -= 1
-                if self.test():
-                    break
-
-        logger.info(self.cropIndex)
-
-        self.update_box(self.imageLabel)
-        self.update_preview(self.imageLabel)
+            self.dec_scroll_crop()
+            changed = True
+        if changed:
+            self.update_selection_box(self.imageLabel)
+            self.update_preview(self.imageLabel)
 
     def on_mouse_down(self, event):
         self.remove_focus()
 
-        self.opposite_corner_coord = (event.x, event.y)
-        self.this_corner_coord = (event.x, event.y)
+        self.mouse_down_position = box.Size2D(event.x, event.y)
+        self.mouse_position = box.Size2D(event.x, event.y)
 
-        self.x = event.x
-        self.y = event.y
-
-        self.update_box(event.widget)
+        self.update_selection_box(event.widget)
 
     def on_mouse_drag(self, event):
-        delta = (
-            event.x - self.this_corner_coord[0],
-            event.y - self.this_corner_coord[1],
-        )
-        self.this_corner_coord = (event.x, event.y)
+        new_position = box.Size2D(event.x, event.y)
+        delta = new_position - self.mouse_position
+        self.mouse_position = new_position
 
-        prevw = self.imagePhoto.width()
-        prevh = self.imagePhoto.height()
+        if self.selection_mode.get() == "click-drag":
+            if self.shift_pressed:
+                # Holding shift moves the current selection rather than resizes it
+                self.mouse_selection = self.mouse_selection + delta
+            else:
+                # Note: size may be negative, which preserves the origin corner
+                # as the offset
+                self.mouse_selection = box.Box2D(
+                    self.mouse_down_position,
+                    self.mouse_position - self.mouse_down_position,
+                )
 
-        # click-drag selection
-        if self.shift_pressed:
-            self.opposite_corner_coord = (
-                self.opposite_corner_coord[0] + delta[0],
-                self.opposite_corner_coord[1] + delta[1],
-            )
-
-        self.x = event.x
-        self.y = event.y
-
-        self.update_box(event.widget)
+        self.update_selection_box(event.widget)
 
     def on_mouse_up(self, event):
         self.update_preview(event.widget)
