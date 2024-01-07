@@ -432,6 +432,10 @@ class App(ThemedTk):
         if np.array_equal(self.display_area, new_display_area):
             return
 
+        # Left/right panel sizes are computed manually based off the entire
+        # window size because it was easier than figuring out tkinter. Note that
+        # the height for the bottom bar of control buttons is not taken into
+        # account.
         logger.info("Resize window {}x{}".format(*new_display_area))
         self.display_area = new_display_area
         self.image_area = self.display_area.copy()
@@ -441,6 +445,8 @@ class App(ThemedTk):
         self.update_selection_box(self.imageLabel)
         self.update_preview(self.imageLabel)
 
+        # If the input image is huge, updating the display image can be quite
+        # slow, so consolidate multiple resizes to a single delayed event.
         if self.delayed_resize_id:
             self.after_cancel(self.delayed_resize_id)
         if self.image_orig:

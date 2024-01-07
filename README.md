@@ -1,57 +1,54 @@
 # cropall
 
-A small cross-platform python script to make cropping and resizing images fast.
-Programs like gimp take way too long to start, open an image, crop it, export it.
-A batch job/script can automate it but everything gets cropped at the same positions.
-This sits in the middle, automating loading/clicking crop/save/next so your amazing
-human vision can be used to quickly select what needs to be cropped and not wasted
-on navigating clunky GUI hierarchies.
-I'm surprised there aren't others out there, or maybe I didn't spend long enough
-searching. `click2crop` looks good but is not free.
+![gui preview](doc/preview.jpg "GUI preview")
+
+A small cross-platform python script to interactively crop and resize lots of
+images images quickly. Image editors like gimp take way too long to start, open
+an image, crop it, export it. A batch job/script can automate it but everything
+gets cropped at the same positions. This app sits in the middle, automating
+loading/clicking crop/save/next so your amazing human vision can be used to
+quickly select what needs to be cropped and not wasted on navigating clunky GUI
+hierarchies.
 
 This is really a minimal GUI and preview for the following imagemagick command:
 
     convert in.jpg -crop <region> -resize <fit> out.jpg
 
-## Forks
+This script actually uses imagemagick under the hood for its fast and high
+quality resampling algorithms. The GUI shows a quick and low quality preview.
 
-- [@rystraum](https://github.com/rystraum/cropall) has added a number of features such as rotation and keyboard shortcuts. See [#2](https://github.com/pknowles/cropall/issues/2).
+## Usage
 
-# Install
+Download a pre-built from the
+[releases](https://github.com/pknowles/cropall/releases) section on github.
+These are self contained packages created with pyinstaller.
 
-    git clone https://github.com/pknowles/cropall.git
-
-This needs...
-
--  python 3.x (added to PATH)
-   - python-tk
-   - python-imaging-tk
--  ImageMagick (added to PATH)
+Alternatively, grab the source and dependencies. I hope it's simple enough that
+people with a little python experience can adapt it as needed.
 
 ```
-#Ubuntu
-sudo apt-get install python python-tk python-imaging-tk imagemagick
-
-#Fedora
-sudo yum install python tkinter python-imaging-tk ImageMagick
+git clone https://github.com/pknowles/cropall.git
+cd cropall
+python -m venv .venv
+.venv/bin/activate
+pip install -r requirements.txt
+python cropall.py
 ```
 
-I've installed and am using Pillow (`python-pillow` and `python-pillow-tk`) for this, but it may work with PIL.
+Feel free to report issues and pull requests are most welcome, thank you! I
+can't promise I'll get to them immediately sorry.
 
-> [Warning: Pillow and PIL cannot co-exist in the same environment. Before installing Pillow, please uninstall PIL.](http://pillow.readthedocs.org/en/latest/installation.html)
-	
-# Instructions
+## Forks and alternatives
 
-1. Run the script (double click if the OS knows to open-with or `./cropall.py`).
-
-2. If there are images in the current working directory, it should start. Otherwise it will ask for a directory.
-
-3. Click to select the region, scroll to adjust the size, click `crop` to start imagemagick and load the next image.
-
-There are a few options at the top of the script file itself (I haven't bothered to provide GUI controls for some yet).
-
+- [@rystraum](https://github.com/rystraum/cropall) has added a number of
+  features such as rotation and keyboard shortcuts. See
+  [#2](https://github.com/pknowles/cropall/issues/2).
+- There's a great list of alternatives here:
+  https://askubuntu.com/questions/97695/is-there-a-lightweight-tool-to-crop-images-quickly
+- E.g.: https://github.com/weclaw1/inbac
 
 ## Additional
 
-Do whatever you want with it, within GPL3. The usual don't-blame-me-if-it-deletes-your-stuff.
+Do whatever you want with it, within GPL3. The usual
+don't-blame-me-if-it-deletes-your-stuff.
 
