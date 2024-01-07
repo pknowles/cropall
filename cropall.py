@@ -26,8 +26,19 @@ import pathlib
 error_handler.activate("cropall")
 
 config_file = pathlib.Path("cropall.ini")
+
+# config is in a subdirectory when packaged with pyinstaller
 if hasattr(sys, "_MEIPASS"):
     config_file = pathlib.Path(sys._MEIPASS) / config_file
+
+    # Add the _internal directory to PATH for wand/imagemagick on windows
+    imagemagick_dir = str(pathlib.Path(sys._MEIPASS))
+    os.environ["MAGICK_HOME"] = imagemagick_dir
+    os.environ["MAGICK_CODER_FILTER_PATH"] = imagemagick_dir
+    os.environ["MAGICK_CODER_MODULE_PATH"] = imagemagick_dir
+    if sys.platform == "win32":
+        os.environ["PATH"] += os.pathsep + sys._MEIPASS
+
 config = configparser.ConfigParser()
 config.read(config_file)
 

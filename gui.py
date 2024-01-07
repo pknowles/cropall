@@ -104,7 +104,7 @@ class App(ThemedTk):
         self.outDir = self.inDir / self.args.output
 
         if not os.path.exists(self.outDir):
-            logger.info("Creating output directory, " + self.outDir)
+            logger.info("Creating output directory, {}".format(self.outDir))
             os.makedirs(self.outDir)
 
         logger.info("Initializing GUI")

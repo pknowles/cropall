@@ -30,9 +30,30 @@ people with a little python experience can adapt it as needed.
 git clone https://github.com/pknowles/cropall.git
 cd cropall
 python -m venv .venv
-.venv/bin/activate
+
+# linux
+. .venv/bin/activate
+
+# windows
+. .venv/Scripts/Activate
+
 pip install -r requirements.txt
 python cropall.py
+
+# Install ImageMagick https://docs.wand-py.org/en/latest/guide/install.html
+# E.g.:
+
+# Ubuntu
+sudo apt-get install libmagickwand-dev
+
+# Fedora
+sudo dnf install ImageMagick-devel
+
+# Windows (make sure to match python x86 or x64)
+# Download dll from: https://imagemagick.org/script/download.php#windows
+
+# Optional: create the standalone binary distribution
+pyinstaller cropall.spec
 ```
 
 Feel free to report issues and pull requests are most welcome, thank you! I
@@ -47,8 +68,30 @@ can't promise I'll get to them immediately sorry.
   https://askubuntu.com/questions/97695/is-there-a-lightweight-tool-to-crop-images-quickly
 - E.g.: https://github.com/weclaw1/inbac
 
-## Additional
+## License
 
-Do whatever you want with it, within GPL3. The usual
-don't-blame-me-if-it-deletes-your-stuff.
+The python source code here is under GPL v3.
 
+```
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+```
+
+### Third party code
+
+Pre-built binaries of ImageMagick are included with the distribution. See:
+https://imagemagick.org/script/license.php
+
+The release distribution includes various scripts and binaries collected by
+`pyinstaller`. Licenses found in the venv directory are included by
+`cropall.spec`.
