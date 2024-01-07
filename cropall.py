@@ -34,8 +34,8 @@ if hasattr(sys, "_MEIPASS"):
     # Add the _internal directory to PATH for wand/imagemagick on windows
     imagemagick_dir = str(pathlib.Path(sys._MEIPASS))
     os.environ["MAGICK_HOME"] = imagemagick_dir
-    os.environ["MAGICK_CODER_FILTER_PATH"] = imagemagick_dir
-    os.environ["MAGICK_CODER_MODULE_PATH"] = imagemagick_dir
+    os.environ["MAGICK_CODER_FILTER_PATH"] = os.path.join(imagemagick_dir, "modules/filters")
+    os.environ["MAGICK_CODER_MODULE_PATH"] = os.path.join(imagemagick_dir, "modules/coders")
     if sys.platform == "win32":
         os.environ["PATH"] += os.pathsep + sys._MEIPASS
 
