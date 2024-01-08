@@ -29,8 +29,6 @@
 #       or on linux install python-pillow and python-pillow-tk http://stackoverflow.com/questions/10630736/no-module-named-image-tk
 
 import os
-import sys
-import tkinter
 import logging
 import box
 import numpy as np
@@ -38,8 +36,6 @@ from tkinter import *
 from tkinter.ttk import *
 from ttkthemes import ThemedTk
 from tkinter.messagebox import showinfo
-import shutil
-import pathlib
 from PIL import ImageOps
 from PIL import ImageTk
 from PIL import Image
@@ -153,11 +149,11 @@ class App(ThemedTk):
         self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
         self.buttons += [Button(self.controls, text="Next", command=self.next)]
         self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
-        self.buttons += [Button(self.controls, text="Copy", command=self.copy)]
+        self.buttons += [Button(self.controls, text="Copy", command=self.copy_next)]
         self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
-        self.buttons += [Button(self.controls, text="Resize", command=self.resize)]
+        self.buttons += [Button(self.controls, text="Resize", command=self.resize_next)]
         self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
-        self.buttons += [Button(self.controls, text="Crop", command=self.save_next)]
+        self.buttons += [Button(self.controls, text="Crop", command=self.crop_next)]
         self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
 
         self.menubar = Menu(self)
@@ -177,6 +173,10 @@ class App(ThemedTk):
         self.resize_after_crop = IntVar()
         self.options_menu.add_checkbutton(
             label="Resize Cropped Image", variable=self.resize_after_crop
+        )
+        self.confirm_overwrite = IntVar()
+        self.options_menu.add_checkbutton(
+            label="Confirm before overwriting", variable=self.confirm_overwrite
         )
         self.help_menu = Menu(self.menubar)
         self.help_menu.add_command(
@@ -209,6 +209,9 @@ class App(ThemedTk):
         self.resize_after_crop.set(
             1 if self.configfile.getboolean("cropper", "resize") else 0
         )
+        self.confirm_overwrite.set(
+            1 if self.configfile.getboolean("cropper", "confirm_overwrite") else 0
+        )
 
         self.aspect_vars[0].trace("w", self.on_option_changed)
         self.aspect_vars[1].trace("w", self.on_option_changed)
@@ -218,9 +221,10 @@ class App(ThemedTk):
         self.fixed_aspect.trace("w", self.on_option_changed)
         self.show_guides.trace("w", self.on_option_changed)
         self.resize_after_crop.trace("w", self.on_option_changed)
+        self.confirm_overwrite.trace("w", self.on_option_changed)
         self.selection_mode.trace("w", self.on_option_changed)
         self.bind("<Configure>", self.on_resize)
-        self.bind("<space>", self.save_next)
+        self.bind("<space>", self.crop_next)
         self.bind("<Right>", self.next)
         self.bind("<Left>", self.previous)
         self.bind("d", self.next)
@@ -311,26 +315,26 @@ class App(ThemedTk):
         self.current = (self.current + len(self.images)) % len(self.images)
         self.load_imgfile(self.images[self.current])
 
-    def copy(self):
-        shutil.copy(
+    def copy_next(self):
+        if self.cropper.copy(
             self.input_folder / self.currentName, self.output_folder / self.currentName
-        )
-        self.next()
+        ):
+            self.next()
 
-    def resize(self):
-        self.cropper.resize(
+    def resize_next(self):
+        if self.cropper.resize(
             self.input_folder / self.currentName, self.output_folder / self.currentName
-        )
-        self.next()
+        ):
+            self.next()
 
-    def save_next(self, event=None):
+    def crop_next(self, event=None):
         box = self.image_crop_box()
-        self.cropper.crop(
+        if self.cropper.crop(
             self.input_folder / self.currentName,
             self.output_folder / self.currentName,
             box.coords().tolist(),
-        )
-        self.next()
+        ):
+            self.next()
 
     def load_imgfile(self, filename):
         self.currentName = filename
@@ -509,6 +513,9 @@ class App(ThemedTk):
         )
         self.configfile["cropper"]["resize"] = make_bool(
             self.resize_after_crop.get() != 0
+        )
+        self.configfile["cropper"]["confirm_overwrite"] = make_bool(
+            self.confirm_overwrite.get() != 0
         )
         self.configfile["selection"]["mode"] = self.selection_mode.get()
 

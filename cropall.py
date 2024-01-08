@@ -48,12 +48,10 @@ if hasattr(sys, "_MEIPASS"):
     if sys.platform == "win32":
         os.environ["PATH"] += os.pathsep + sys._MEIPASS
 
-# use the default config if this is the first run
-if not os.path.exists(config_file) and os.path.exists(default_config_file):
-    shutil.copy(default_config_file, config_file)
-
 config = configparser.ConfigParser()
-config.read(config_file)
+config.read(default_config_file)
+if os.path.exists(config_file):
+    config.read(config_file)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(

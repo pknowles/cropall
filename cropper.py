@@ -15,9 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys
+import os
+import shutil
 import logging
 import wand.image
+from tkinter import messagebox
 
 logger = logging.getLogger("cropall")
 
@@ -26,7 +28,19 @@ class Cropper:
     def __init__(self, config):
         self.config = config
 
+    def can_replace(self, dst_file):
+        ask = self.config.getboolean("cropper", "confirm_overwrite")
+        exists = os.path.exists(dst_file)
+        if ask and exists:
+            return messagebox.askokcancel(
+                f"File exists. Overwrite?",
+                f"{dst_file} already exists. Are you sure you want to overwrite it? (disable asking in options)",
+            )
+        return True
+
     def resize(self, src_file, dst_file):
+        if not self.can_replace(dst_file):
+            return False
         with wand.image.Image(filename=src_file) as img:
             img.transform(
                 resize="{}x{}>".format(
@@ -35,8 +49,11 @@ class Cropper:
                 )
             )
             img.save(filename=dst_file)
+        return True
 
     def crop(self, src_file, dst_file, box):
+        if not self.can_replace(dst_file):
+            return False
         with wand.image.Image(filename=src_file) as img:
             crop = "{}x{}+{}+{}".format(
                 box[2] - box[0], box[3] - box[1], box[0], box[1]
@@ -51,3 +68,10 @@ class Cropper:
                 img.transform(resize=resize)
             logger.info(f"Writing {dst_file}, crop {crop} {resize}")
             img.save(filename=dst_file)
+        return True
+
+    def copy(self, src_file, dst_file):
+        if not self.can_replace(dst_file):
+            return False
+        shutil.copy(src_file, dst_file)
+        return True
