@@ -53,7 +53,7 @@ for root, dir, files in os.walk(sysconfig.get_paths()["purelib"]):
 # Find the ImageMagick license file, typically next to the dll
 imagemagick_dirs = ["/usr/share/doc/ImageMagick-libs", "/usr/share/licenses/ImageMagick-libs"]
 if sys.platform == "win32":
-    imagemagick_dirs = set(map(os.path.dirname, libraries))
+    imagemagick_dirs = set(map(os.path.dirname, [lib for lib, dst in libraries]))
 for dir in imagemagick_dirs:
     for file in matches:
         imagemagick_license = os.path.join(dir, file)
@@ -67,7 +67,7 @@ a = Analysis(
     ['cropall.py'],
     pathex=[],
     binaries=libraries,
-    datas=[('cropall.ini', '.'), ('cropall_default.ini', '.')] + licenses,
+    datas=[('cropall_default.ini', '.'), ('LICENSE.txt', '.')] + licenses,
     hiddenimports=['PIL._tkinter_finder'],
     hookspath=[],
     hooksconfig={},
