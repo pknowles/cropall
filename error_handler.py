@@ -47,3 +47,4 @@ def activate(logger_name):
     handler = logging.StreamHandler(stream=sys.stdout)
     logger.addHandler(handler)
     sys.excepthook = partial(handle_exception, logger)
+    return logger

@@ -17,13 +17,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import sys
 import error_handler
 import argparse
 import configparser
 import pathlib
 
-error_handler.activate("cropall")
+logger = error_handler.activate("cropall")
 
 config_file = pathlib.Path("cropall.ini")
 
@@ -34,8 +35,12 @@ if hasattr(sys, "_MEIPASS"):
     # Add the _internal directory to PATH for wand/imagemagick on windows
     imagemagick_dir = str(pathlib.Path(sys._MEIPASS))
     os.environ["MAGICK_HOME"] = imagemagick_dir
-    os.environ["MAGICK_CODER_FILTER_PATH"] = os.path.join(imagemagick_dir, "modules/filters")
-    os.environ["MAGICK_CODER_MODULE_PATH"] = os.path.join(imagemagick_dir, "modules/coders")
+    os.environ["MAGICK_CODER_FILTER_PATH"] = os.path.join(
+        imagemagick_dir, "modules/filters"
+    )
+    os.environ["MAGICK_CODER_MODULE_PATH"] = os.path.join(
+        imagemagick_dir, "modules/coders"
+    )
     if sys.platform == "win32":
         os.environ["PATH"] += os.pathsep + sys._MEIPASS
 
@@ -47,94 +52,56 @@ parser.add_argument(
     "input_folder",
     default="./",
     type=pathlib.Path,
-    nargs="*",
+    nargs="?",
     help="Directories for source photos",
 )
-# parser.add_argument(
-#    "-r",
-#    "--recursive",
-#    action="store_true",
-#    help="Search recursively in the source directories",
-# )
-parser.add_argument(
-    "--output",
-    default=config.get("cropall", "out_directory"),
-    type=pathlib.Path,
-    help="Output directory relative to input",
-)
-parser.add_argument(
-    "--width",
-    default=config.getint("cropall", "resize_width"),
-    type=int,
-    help="Resize to this width after cropping",
-)
-parser.add_argument(
-    "--height",
-    default=config.getint("cropall", "resize_height"),
-    type=int,
-    help="Resize to this height after cropping",
-)
-parser.add_argument(
-    "--fast-preview",
-    default=config.getboolean("cropall", "fast_preview"),
-    type=argparse.BooleanOptionalAction,
-    help="Show a low resolution preview. The final image will look better than preview.",
-)
-parser.add_argument(
-    "--antialiase-slow-preview",
-    default=config.getboolean("cropall", "antialiase_slow_preview"),
-    type=argparse.BooleanOptionalAction,
-    help="When not using --fast-preview, gives a better looking left hand preview image.",
-)
-parser.add_argument(
-    "--allow-fractional-size",
-    default=config.getboolean("cropall", "allow_fractional_size"),
-    type=argparse.BooleanOptionalAction,
-    help="ignores check to see if maintaining the apsect ratio perfectly is possible.",
-)
-parser.add_argument(
-    "-e",
-    "--extensions",
-    default=config.get("cropall", "image_extensions").split(),
-    nargs="+",
-    help="File extensions considered to be images",
-)
-parser.add_argument(
-    "-m",
-    "--select-mode",
-    default=config.get("cropall", "initial_selection_mode"),
-    choices=(
-        "scroll",
-        "box",
-    ),
-    help="Method to choose the region to crop",
-)
-parser.add_argument(
-    "--show-guides",
-    default=config.getboolean("cropall", "show_rule_of_thirds"),
-    type=argparse.BooleanOptionalAction,
-    help="Displays rule-of-third guidelines.",
-)
-parser.add_argument(
-    "--selection-color",
-    default=config.get("cropall", "selection_box_color"),
-    help="Color of the selection box",
-)
-parser.add_argument(
-    "--fixed-aspect",
-    default=config.getboolean("cropall", "default_fix_ratio"),
-    type=argparse.BooleanOptionalAction,
-    help="Fixes aspect ratio",
-)
+
+
+def getImages(config, dir):
+    logger.info("Scanning {}".format(dir))
+    extensions = config["image_extensions"].split()
+    images = []
+    for filename in os.listdir(dir):
+        basename, ext = os.path.splitext(filename)
+        if ext.lower() in extensions:
+            logger.info("  Found {}".format(filename))
+            images += [filename]
+    logger.info("Found {} images".format(len(images)))
+    return images
+
 
 if __name__ == "__main__":
+    cropall_config = config["cropall"]
     args = parser.parse_args()
+    if args.input_folder:
+        input_folder = str(args.input_folder)
+    else:
+        # Ask for the input directory
+        import tkinter.filedialog
+        input_folder = tkinter.filedialog.askdirectory(
+            initialdir=cropall_config["input_folder"], title="Please select a directory"
+        )
+    if not len(input_folder):
+        raise ValueError("No directory selected. Exiting.")
+    input_folder = pathlib.Path(os.path.normpath(input_folder))
+    images = getImages(cropall_config, input_folder)
+    if not len(images):
+        raise SystemExit("No images found in " + input_folder + ". Exiting.")
+    cropall_config["input_folder"] = str(input_folder)
+
+    output_folder = input_folder / pathlib.Path(cropall_config["output_folder"])
+    if not os.path.exists(output_folder):
+        logger.info("Creating output directory, {}".format(output_folder))
+        os.makedirs(output_folder)
 
     import cropper
 
-    cropper = cropper.Cropper(args)
+    cropper = cropper.Cropper(config)
 
     import gui
 
-    app = gui.App(args, cropper)
+    app = gui.App(config, cropper, input_folder, images, output_folder)
     app.mainloop()
+
+    with open(config_file, 'w') as filehandle:
+        config.write(filehandle)

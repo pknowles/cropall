@@ -19,28 +19,35 @@ import sys
 import logging
 import wand.image
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cropall")
 
 
 class Cropper:
-    def __init__(self, args):
-        self.args = args
+    def __init__(self, config):
+        self.config = config
 
     def resize(self, src_file, dst_file):
-        if not (self.args.width > 0):
-            logger.error("Error: no resize specified. Not resizing")
-            return
         with wand.image.Image(filename=src_file) as img:
-            img.transform(resize="{}x{}>".format(self.args.width, self.args.height))
+            img.transform(
+                resize="{}x{}>".format(
+                    self.config["cropper"]["resize_width"],
+                    self.config["cropper"]["resize_height"],
+                )
+            )
             img.save(filename=dst_file)
 
     def crop(self, src_file, dst_file, box):
         with wand.image.Image(filename=src_file) as img:
-            img.transform(
-                crop="{}x{}+{}+{}".format(
-                    box[2] - box[0], box[3] - box[1], box[0], box[1]
-                )
+            crop = "{}x{}+{}+{}".format(
+                box[2] - box[0], box[3] - box[1], box[0], box[1]
             )
-            if self.args.width > 0:
-                img.transform(resize="{}x{}>".format(self.args.width, self.args.height))
+            img.transform(crop=crop)
+            resize = "no resize"
+            if self.config.getboolean("cropper", "resize"):
+                resize = "{}x{}>".format(
+                    self.config["cropper"]["resize_width"],
+                    self.config["cropper"]["resize_height"],
+                )
+                img.transform(resize=resize)
+            logger.info(f"Writing {dst_file}, crop {crop} {resize}")
             img.save(filename=dst_file)

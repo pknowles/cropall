@@ -37,7 +37,6 @@ import numpy as np
 from tkinter import *
 from tkinter.ttk import *
 from ttkthemes import ThemedTk
-import tkinter.filedialog
 from tkinter.messagebox import showinfo
 import shutil
 import pathlib
@@ -56,59 +55,20 @@ def clamp(x, a, b):
 
 
 class App(ThemedTk):
-    def getImages(self, dir):
-        logger.info("Scanning {}".format(dir))
-        allImages = []
-        for i in os.listdir(dir):
-            b, e = os.path.splitext(i)
-            if e.lower() not in self.args.extensions:
-                continue
-            allImages += [i]
-        return allImages
-
-    def __init__(self, args, cropper):
+    def __init__(self, config, cropper, input_folder, images, output_folder):
         super().__init__(theme="breeze")
 
-        self.args = args
+        self.configfile = config
         self.cropper = cropper
-
-        if self.args.width < -1 or self.args.height < -1:
-            raise ValueError("Resize value is invalid")
+        self.input_folder = input_folder
+        self.images = images
+        self.output_folder = output_folder
 
         self.wm_title("cropall")
 
         # Initial size based on screen dpi
         dpi = self.winfo_fpixels("1i")
         self.geometry("{}x{}".format(int(dpi * 16), int(dpi * 8)))
-
-        self.inDir = self.args.input_folder[0]
-
-        infiles = self.getImages(self.inDir)
-
-        # If that didn't work, show a browse dialogue
-        if not len(infiles):
-            logger.warning(
-                "No images in the current directory. Please select a different directory."
-            )
-            self.lift()
-            self.inDir = tkinter.filedialog.askdirectory(
-                parent=self, initialdir=self.inDir, title="Please select a directory"
-            )
-            if not len(self.inDir):
-                raise ValueError("No directory selected. Exiting.")
-            self.inDir = pathlib.Path(os.path.normpath(self.inDir))
-            infiles = self.getImages(self.inDir)
-            if not len(infiles):
-                raise RuntimeError("No images found in " + self.inDir + ". Exiting.")
-            logger.info("Found {} images".format(len(infiles)))
-        else:
-            logger.info("Found {} images in the current directory".format(len(infiles)))
-
-        self.outDir = self.inDir / self.args.output
-
-        if not os.path.exists(self.outDir):
-            logger.info("Creating output directory, {}".format(self.outDir))
-            os.makedirs(self.outDir)
 
         logger.info("Initializing GUI")
 
@@ -129,8 +89,6 @@ class App(ThemedTk):
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
-
-        self.files = infiles
 
         self.image_orig = None
         self.image = None
@@ -153,51 +111,73 @@ class App(ThemedTk):
 
         self.controls = Frame(self)
         self.controls.grid(row=1, column=0, columnspan=2, sticky="nsew")
-        self.buttons = []
+
+        col = iter(range(14))
+
         selection_mode_options = ("click-drag", "scroll")
         self.selection_mode = StringVar()
-        self.selection_mode.set(self.args.select_mode)
+        self.selection_mode.set(self.configfile["selection"]["mode"])
         self.selection_mode_dropdown = OptionMenu(
             self.controls,
             self.selection_mode,
-            args.select_mode,
+            self.configfile["selection"]["mode"],
             *selection_mode_options,
         )
-        self.selection_mode_dropdown.grid(row=0, column=0, sticky="nsew")
+        self.selection_mode_dropdown.grid(row=0, column=next(col), sticky="nsew")
 
         self.inputs = []
+        self.input_labels = []
 
         self.aspect_vars = (StringVar(), StringVar())
         self.aspect_vars[0].set(3)
         self.aspect_vars[1].set(2)
-        self.inputs += [Entry(self.controls, textvariable=self.aspect_vars[0])]
-        self.inputs[-1].grid(row=0, column=2, sticky="nsew")
-        self.inputs += [Entry(self.controls, textvariable=self.aspect_vars[1])]
-        self.inputs[-1].grid(row=0, column=3, sticky="nsew")
+        self.input_labels += [Label(self.controls, text="Aspect")]
+        self.input_labels[-1].grid(row=0, column=next(col), sticky="nsew")
+        self.inputs += [Entry(self.controls, textvariable=self.aspect_vars[0], width=4)]
+        self.inputs[-1].grid(row=0, column=next(col), sticky="nsew")
+        self.inputs += [Entry(self.controls, textvariable=self.aspect_vars[1], width=4)]
+        self.inputs[-1].grid(row=0, column=next(col), sticky="nsew")
 
+        self.resize_vars = (StringVar(), StringVar())
+        self.resize_vars[0].set(3)
+        self.resize_vars[1].set(2)
+        self.input_labels += [Label(self.controls, text="Resize")]
+        self.input_labels[-1].grid(row=0, column=next(col), sticky="nsew")
+        self.inputs += [Entry(self.controls, textvariable=self.resize_vars[0], width=6)]
+        self.inputs[-1].grid(row=0, column=next(col), sticky="nsew")
+        self.inputs += [Entry(self.controls, textvariable=self.resize_vars[1], width=6)]
+        self.inputs[-1].grid(row=0, column=next(col), sticky="nsew")
+
+        self.buttons = []
         self.buttons += [Button(self.controls, text="Prev", command=self.previous)]
-        self.buttons[-1].grid(row=0, column=4, sticky="nsew")
+        self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
         self.buttons += [Button(self.controls, text="Next", command=self.next)]
-        self.buttons[-1].grid(row=0, column=5, sticky="nsew")
+        self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
         self.buttons += [Button(self.controls, text="Copy", command=self.copy)]
-        self.buttons[-1].grid(row=0, column=6, sticky="nsew")
+        self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
         self.buttons += [Button(self.controls, text="Resize", command=self.resize)]
-        self.buttons[-1].grid(row=0, column=7, sticky="nsew")
+        self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
         self.buttons += [Button(self.controls, text="Crop", command=self.save_next)]
-        self.buttons[-1].grid(row=0, column=8, sticky="nsew")
+        self.buttons[-1].grid(row=0, column=next(col), sticky="nsew")
 
         self.menubar = Menu(self)
         self.options_menu = Menu(self.menubar)
-        self.restrictRatio = IntVar()
+        self.fixed_aspect = IntVar()
         self.options_menu.add_checkbutton(
-            label="Fix Aspect Ratio", variable=self.restrictRatio
+            label="Fix Aspect Ratio", variable=self.fixed_aspect
         )
-        self.restrictSizes = IntVar()
+        self.perfect_pixel_ratio = IntVar()
         self.options_menu.add_checkbutton(
-            label="Perfect Pixel Ratio", variable=self.restrictSizes
+            label="Perfect Pixel Ratio", variable=self.perfect_pixel_ratio
         )
-        self.showGuides = IntVar()
-        self.options_menu.add_checkbutton(label="Show guides", variable=self.showGuides)
+        self.show_guides = IntVar()
+        self.options_menu.add_checkbutton(
+            label="Show guides", variable=self.show_guides
+        )
+        self.resize_after_crop = IntVar()
+        self.options_menu.add_checkbutton(
+            label="Resize Cropped Image", variable=self.resize_after_crop
+        )
         self.help_menu = Menu(self.menubar)
         self.help_menu.add_command(
             label="About", command=lambda: showinfo("About", about_text)
@@ -206,32 +186,48 @@ class App(ThemedTk):
         self.menubar.add_cascade(label="Help", menu=self.help_menu)
         self.configure(relief="flat", background="gray", menu=self.menubar)
 
-        self.imageLabel = Canvas(self, highlightthickness=0, bg="grey")
-        self.imageLabel.grid(row=0, column=0, sticky="nw", padx=0, pady=0)
-        self.c = self.imageLabel
+        self.image_label = Canvas(self, highlightthickness=0, bg="grey")
+        self.image_label.grid(row=0, column=0, sticky="nw", padx=0, pady=0)
+        self.c = self.image_label
 
-        self.previewLabel = Label(self, relief=FLAT, borderwidth=0)
-        self.previewLabel.grid(row=0, column=1, sticky="nw", padx=0, pady=0)
+        self.preview_label = Label(self, relief=FLAT, borderwidth=0)
+        self.preview_label.grid(row=0, column=1, sticky="nw", padx=0, pady=0)
 
-        self.restrictSizes.set(0 if self.args.allow_fractional_size else 1)
-        self.restrictRatio.set(1 if self.args.fixed_aspect else 0)
-        self.showGuides.set(1 if self.args.show_guides else 0)
+        self.aspect_vars[0].set(self.configfile.getint("selection", "aspect_width"))
+        self.aspect_vars[1].set(self.configfile.getint("selection", "aspect_height"))
+        self.resize_vars[0].set(self.configfile.getint("cropper", "resize_width"))
+        self.resize_vars[1].set(self.configfile.getint("cropper", "resize_height"))
+        self.perfect_pixel_ratio.set(
+            1 if self.configfile.getboolean("selection", "perfect_pixel_ratio") else 0
+        )
+        self.fixed_aspect.set(
+            1 if self.configfile.getboolean("selection", "fixed_aspect") else 0
+        )
+        self.show_guides.set(
+            1 if self.configfile.getboolean("selection", "show_guides") else 0
+        )
+        self.resize_after_crop.set(
+            1 if self.configfile.getboolean("cropper", "resize") else 0
+        )
 
-        self.aspect_vars[0].trace("w", self.on_aspect_changed)
-        self.aspect_vars[1].trace("w", self.on_aspect_changed)
-        self.restrictSizes.trace("w", self.on_option_changed)
-        self.restrictRatio.trace("w", self.on_aspect_changed)
-        self.showGuides.trace("w", self.on_aspect_changed)
-        self.selection_mode.trace("w", self.on_aspect_changed)
+        self.aspect_vars[0].trace("w", self.on_option_changed)
+        self.aspect_vars[1].trace("w", self.on_option_changed)
+        self.resize_vars[0].trace("w", self.on_option_changed)
+        self.resize_vars[1].trace("w", self.on_option_changed)
+        self.perfect_pixel_ratio.trace("w", self.on_option_changed)
+        self.fixed_aspect.trace("w", self.on_option_changed)
+        self.show_guides.trace("w", self.on_option_changed)
+        self.resize_after_crop.trace("w", self.on_option_changed)
+        self.selection_mode.trace("w", self.on_option_changed)
         self.bind("<Configure>", self.on_resize)
         self.bind("<space>", self.save_next)
         self.bind("<Right>", self.next)
         self.bind("<Left>", self.previous)
         self.bind("d", self.next)
         self.bind("a", self.previous)
-        self.imageLabel.bind("<ButtonPress-1>", self.on_mouse_down)
-        self.imageLabel.bind("<B1-Motion>", self.on_mouse_drag)
-        self.imageLabel.bind("<ButtonRelease-1>", self.on_mouse_up)
+        self.image_label.bind("<ButtonPress-1>", self.on_mouse_down)
+        self.image_label.bind("<B1-Motion>", self.on_mouse_drag)
+        self.image_label.bind("<ButtonRelease-1>", self.on_mouse_up)
         self.bind("<KeyPress-Shift_L>", self.on_shift_press)
         self.bind("<KeyRelease-Shift_L>", self.on_shift_release)
         self.bind("<Escape>", self.remove_focus)
@@ -241,11 +237,11 @@ class App(ThemedTk):
 
         logger.warning("Checking for existing crops")
         self.current = 0
-        while self.current < len(self.files) and os.path.exists(
-            os.path.join(self.outDir, self.files[self.current])
+        while self.current < len(self.images) and os.path.exists(
+            os.path.join(self.output_folder, self.images[self.current])
         ):
             logger.warning(
-                "Skipping " + self.files[self.current] + ". Already cropped."
+                "Skipping " + self.images[self.current] + ". Already cropped."
             )
             self.current += 1
 
@@ -281,7 +277,7 @@ class App(ThemedTk):
             image_mouse_box = (self.mouse_selection - image_box).scaled(
                 image_box.size, self.image_size
             )
-            if self.restrictRatio.get() == 1:
+            if self.fixed_aspect.get() == 1:
                 region = box.Box2D.cover(self.aspect(), image_mouse_box.size, False)
                 region.offset += image_mouse_box.offset
                 box.Box2D
@@ -307,36 +303,38 @@ class App(ThemedTk):
 
     def previous(self, event=None):
         self.current -= 1
-        self.current = (self.current + len(self.files)) % len(self.files)
-        self.load_imgfile(self.files[self.current])
+        self.current = (self.current + len(self.images)) % len(self.images)
+        self.load_imgfile(self.images[self.current])
 
     def next(self, event=None):
         self.current += 1
-        self.current = (self.current + len(self.files)) % len(self.files)
-        self.load_imgfile(self.files[self.current])
+        self.current = (self.current + len(self.images)) % len(self.images)
+        self.load_imgfile(self.images[self.current])
 
     def copy(self):
-        shutil.copy(self.inDir / self.currentName, self.outDir / self.currentName)
+        shutil.copy(
+            self.input_folder / self.currentName, self.output_folder / self.currentName
+        )
         self.next()
 
     def resize(self):
         self.cropper.resize(
-            self.inDir / self.currentName, self.outDir / self.currentName
+            self.input_folder / self.currentName, self.output_folder / self.currentName
         )
         self.next()
 
     def save_next(self, event=None):
         box = self.image_crop_box()
         self.cropper.crop(
-            self.inDir / self.currentName,
-            self.outDir / self.currentName,
+            self.input_folder / self.currentName,
+            self.output_folder / self.currentName,
             box.coords().tolist(),
         )
         self.next()
 
     def load_imgfile(self, filename):
         self.currentName = filename
-        fullFilename = os.path.join(self.inDir, filename)
+        fullFilename = os.path.join(self.input_folder, filename)
         logger.info("Loading " + fullFilename)
         self.image_orig = Image.open(fullFilename)
         self.image_size = box.Size2D(self.image_orig.size[0], self.image_orig.size[1])
@@ -352,20 +350,20 @@ class App(ThemedTk):
         self.mouse_selection = self.displayed_crop_box() + image_box
 
         self.update_image_display()
-        self.update_selection_box(self.imageLabel)
-        self.update_preview(self.imageLabel)
+        self.update_selection_box(self.image_label)
+        self.update_preview(self.image_label)
 
     def update_image_display(self):
         if not self.image_orig:
             return
 
         image_box = box.Box2D.scale_down(self.image_size, self.image_area)
-        if self.args.fast_preview:
+        if self.configfile.getboolean("gui", "fast_preview"):
             # does NOT create a copy so self.image_orig is the same as self.image
             self.image = self.image_orig.copy()
             self.image.thumbnail(image_box.size, Image.NEAREST)
         else:
-            if self.args.antialiase_slow_preview:
+            if self.configfile.getboolean("gui", "antialiase_slow_preview"):
                 self.image = self.image_orig.resize(image_box.size, Image.LANCZOS)
             else:
                 self.image = self.image_orig.copy()
@@ -373,14 +371,14 @@ class App(ThemedTk):
         logger.info("Resized preview")
 
         self.imagePhoto = ImageTk.PhotoImage(self.image)
-        self.imageLabel.configure(width=self.image_area[0], height=self.image_area[1])
-        canva_image = self.imageLabel.create_image(
+        self.image_label.configure(width=self.image_area[0], height=self.image_area[1])
+        canva_image = self.image_label.create_image(
             image_box.offset[0], image_box.offset[1], anchor=NW, image=self.imagePhoto
         )
-        self.imageLabel.tag_lower(canva_image)
+        self.image_label.tag_lower(canva_image)
 
     def test_fractional_size(self):
-        if not self.args.allow_fractional_size:
+        if self.configfile.getboolean("selection", "perfect_pixel_ratio"):
             (w, h) = self.scroll_crop_size()
             if int(h) != h or int(w) != w:
                 return False
@@ -394,14 +392,15 @@ class App(ThemedTk):
         selection_box = self.displayed_crop_box() + image_box
         if self.displayed_crop_rectangle is None:
             self.displayed_crop_rectangle = widget.create_rectangle(
-                selection_box.coords().tolist(), outline=self.args.selection_color
+                selection_box.coords().tolist(),
+                outline=self.configfile["selection"]["color"],
             )
         else:
             widget.coords(
                 self.displayed_crop_rectangle, *selection_box.coords().tolist()
             )
 
-        if self.showGuides.get() == 1:
+        if self.show_guides.get() == 1:
             verti_bbox = selection_box.copy()
             verti_bbox.offset[0] += verti_bbox.size[0] / 3
             verti_bbox.size[0] /= 3
@@ -412,13 +411,13 @@ class App(ThemedTk):
             horiz_bbox = horiz_bbox.coords().tolist()
             if self.horiz_aux_item is None:
                 self.horiz_aux_item = widget.create_rectangle(
-                    horiz_bbox, outline=self.args.selection_color
+                    horiz_bbox, outline=self.configfile["selection"]["color"]
                 )
             else:
                 widget.coords(self.horiz_aux_item, *horiz_bbox)
             if self.verti_aux_item is None:
                 self.verti_aux_item = widget.create_rectangle(
-                    verti_bbox, outline=self.args.selection_color
+                    verti_bbox, outline=self.configfile["selection"]["color"]
                 )
             else:
                 widget.coords(self.verti_aux_item, *verti_bbox)
@@ -435,7 +434,7 @@ class App(ThemedTk):
             return
 
         # get a crop for the preview
-        if self.args.fast_preview:
+        if self.configfile.getboolean("gui", "fast_preview"):
             preview = self.image.crop(self.displayed_crop_box().coords().tolist())
         else:
             preview = self.image_orig.crop(self.image_crop_box().coords().tolist())
@@ -449,7 +448,7 @@ class App(ThemedTk):
         self.preview = preview
 
         self.previewPhoto = ImageTk.PhotoImage(self.preview)
-        self.previewLabel.configure(image=self.previewPhoto)
+        self.preview_label.configure(image=self.previewPhoto)
 
     def remove_focus(self, event=None):
         self.focus()
@@ -469,8 +468,8 @@ class App(ThemedTk):
         self.preview_area = self.display_area.copy()
         self.image_area[0] /= 2
         self.preview_area[0] -= self.image_area[0]
-        self.update_selection_box(self.imageLabel)
-        self.update_preview(self.imageLabel)
+        self.update_selection_box(self.image_label)
+        self.update_preview(self.image_label)
 
         # If the input image is huge, updating the display image can be quite
         # slow, so consolidate multiple resizes to a single delayed event.
@@ -479,12 +478,39 @@ class App(ThemedTk):
         if self.image_orig:
             self.delayed_resize_id = self.after(1000, self.update_image_display)
 
-    def on_aspect_changed(self, event, var1, var2):
-        self.update_selection_box(self.imageLabel)
-        self.update_preview(self.imageLabel)
-
     def on_option_changed(self, event, var1, var2):
-        self.args.allow_fractional_size = self.restrictSizes.get() == 0
+        self.update_selection_box(self.image_label)
+        self.update_preview(self.image_label)
+
+        # Write to the config to so options persist
+        def make_bool(x):
+            return "True" if x else "False"
+
+        aspect = self.aspect()
+        self.configfile["selection"]["aspect_width"] = str(aspect[0])
+        self.configfile["selection"]["aspect_height"] = str(aspect[1])
+        try:
+            self.configfile["cropper"]["resize_width"] = str(
+                max(1, int(self.resize_vars[0].get()))
+            )
+            self.configfile["cropper"]["resize_height"] = str(
+                max(1, int(self.resize_vars[1].get()))
+            )
+        except ValueError:
+            pass
+        self.configfile["selection"]["perfect_pixel_ratio"] = make_bool(
+            self.perfect_pixel_ratio.get() != 0
+        )
+        self.configfile["selection"]["fixed_aspect"] = make_bool(
+            self.fixed_aspect.get() != 0
+        )
+        self.configfile["selection"]["show_guides"] = make_bool(
+            self.show_guides.get() != 0
+        )
+        self.configfile["cropper"]["resize"] = make_bool(
+            self.resize_after_crop.get() != 0
+        )
+        self.configfile["selection"]["mode"] = self.selection_mode.get()
 
     def inc_scroll_crop(self):
         # Scroll one pixel at a time if shift is pressed. Otherwise skip a few
@@ -517,8 +543,8 @@ class App(ThemedTk):
             self.dec_scroll_crop()
             changed = True
         if changed:
-            self.update_selection_box(self.imageLabel)
-            self.update_preview(self.imageLabel)
+            self.update_selection_box(self.image_label)
+            self.update_preview(self.image_label)
 
     def on_mouse_down(self, event):
         self.remove_focus()
