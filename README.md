@@ -1,7 +1,5 @@
 # cropall
 
-![gui preview](doc/preview.jpg "GUI preview")
-
 A small cross-platform python script to interactively crop and resize lots of
 images images quickly. Image editors like gimp take way too long to start, open
 an image, crop it, export it. A batch job/script can automate it but everything
@@ -17,7 +15,28 @@ This is really a minimal GUI and preview for the following imagemagick command:
 This script actually uses imagemagick under the hood for its fast and high
 quality resampling algorithms. The GUI shows a quick and low quality preview.
 
-## Usage
+## Controls
+
+Select the source directory to process. By default results are written to a
+`crops` subdirectory.
+
+- space - crop and advance to the next image
+- left/right - previous/next image
+- click - move the selection, or drag to box-select depending on the mode (hold
+  shift to move the box-select)
+- scroll - adjust crop size when using scroll mode (hold shift for small
+  adjustments)
+
+![gui preview](doc/preview.jpg "GUI preview")
+
+Buttons:
+
+- Copy - copy the source image file to the output directory (no crop/resize)
+- Resize - shrink the image to the smaller of the given width or height, keeping aspect ratio
+- Crop - crop the image to match the region shown in the preview, also resizing
+  if the option is selected
+
+## Install
 
 Download a pre-built from the
 [releases](https://github.com/pknowles/cropall/releases) section on github.
@@ -56,8 +75,9 @@ sudo dnf install ImageMagick-devel
 pyinstaller cropall.spec
 ```
 
-Feel free to report issues and pull requests are most welcome, thank you! I
-can't promise I'll get to them immediately sorry.
+Feel free to report issues and post ideas. Pull requests are most welcome, thank
+you! I can't promise I'll get to them immediately but I'm grateful for your time
+to improve the app 😊.
 
 ## Forks and alternatives
 

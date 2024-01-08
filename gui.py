@@ -38,11 +38,14 @@ from tkinter import *
 from tkinter.ttk import *
 from ttkthemes import ThemedTk
 import tkinter.filedialog
+from tkinter.messagebox import showinfo
 import shutil
 import pathlib
 from PIL import ImageOps
 from PIL import ImageTk
 from PIL import Image
+
+__version__ = "0.9"
 
 logger = logging.getLogger("cropall")
 logger.setLevel(logging.DEBUG)
@@ -109,6 +112,21 @@ class App(ThemedTk):
 
         logger.info("Initializing GUI")
 
+        about_text = (
+            f"cropall version {__version__}\n\nCopyright (C) 2015-2024 Pyarelal Knowles\n\n"
+            + "A small cross-platform python script to interactively crop and resize lots"
+            + " of images images quickly. Image editors like gimp take way too long to "
+            + "start, open an image, crop it, export it. A batch job/script can automate"
+            + " it but everything gets cropped at the same positions. This app sits in "
+            + "the middle, automating loading/clicking crop/save/next so your amazing "
+            + "human vision can be used to quickly select what needs to be cropped and "
+            + "not wasted on navigating clunky GUI hierarchies.\n\n"
+            + "Controls:\n"
+            + "  <space>        - crop and advance to next image\n"
+            + "  <left>/<right> - previous/next image\n"
+            + "  scroll mouse   - adjust crop size when using scroll mode\n"
+        )
+
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -143,7 +161,7 @@ class App(ThemedTk):
             self.controls,
             self.selection_mode,
             args.select_mode,
-            *selection_mode_options
+            *selection_mode_options,
         )
         self.selection_mode_dropdown.grid(row=0, column=0, sticky="nsew")
 
@@ -180,7 +198,12 @@ class App(ThemedTk):
         )
         self.showGuides = IntVar()
         self.options_menu.add_checkbutton(label="Show guides", variable=self.showGuides)
+        self.help_menu = Menu(self.menubar)
+        self.help_menu.add_command(
+            label="About", command=lambda: showinfo("About", about_text)
+        )
         self.menubar.add_cascade(label="Options", menu=self.options_menu)
+        self.menubar.add_cascade(label="Help", menu=self.help_menu)
         self.configure(relief="flat", background="gray", menu=self.menubar)
 
         self.imageLabel = Canvas(self, highlightthickness=0, bg="grey")
@@ -202,6 +225,8 @@ class App(ThemedTk):
         self.selection_mode.trace("w", self.on_aspect_changed)
         self.bind("<Configure>", self.on_resize)
         self.bind("<space>", self.save_next)
+        self.bind("<Right>", self.next)
+        self.bind("<Left>", self.previous)
         self.bind("d", self.next)
         self.bind("a", self.previous)
         self.imageLabel.bind("<ButtonPress-1>", self.on_mouse_down)
@@ -219,7 +244,9 @@ class App(ThemedTk):
         while self.current < len(self.files) and os.path.exists(
             os.path.join(self.outDir, self.files[self.current])
         ):
-            logger.warning("Skipping " + self.files[self.current] + ". Already cropped.")
+            logger.warning(
+                "Skipping " + self.files[self.current] + ". Already cropped."
+            )
             self.current += 1
 
         # Trigger a resize to set self.display_area
