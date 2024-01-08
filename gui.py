@@ -560,10 +560,14 @@ class App(ThemedTk):
         self.mouse_position = new_position
 
         if self.selection_mode.get() == "click-drag":
+            zero_area = (
+                self.mouse_position[0] == self.mouse_down_position[0]
+                or self.mouse_position[1] == self.mouse_down_position[1]
+            )
             if self.shift_pressed:
                 # Holding shift moves the current selection rather than resizes it
                 self.mouse_selection = self.mouse_selection + delta
-            else:
+            elif not zero_area:
                 # Note: size may be negative, which preserves the origin corner
                 # as the offset
                 self.mouse_selection = box.Box2D(
