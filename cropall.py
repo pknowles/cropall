@@ -56,7 +56,6 @@ if os.path.exists(config_file):
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "input_folder",
-    default="./",
     type=pathlib.Path,
     nargs="?",
     help="Directories for source photos",
@@ -93,12 +92,12 @@ if __name__ == "__main__":
     input_folder = pathlib.Path(os.path.normpath(input_folder))
     images = getImages(cropall_config, input_folder)
     if not len(images):
-        raise SystemExit("No images found in " + input_folder + ". Exiting.")
+        raise SystemExit("No images found in '{}'. Exiting.".format(input_folder))
     cropall_config["input_folder"] = str(input_folder)
 
     output_folder = input_folder / pathlib.Path(cropall_config["output_folder"])
     if not os.path.exists(output_folder):
-        logger.info("Creating output directory, {}".format(output_folder))
+        logger.info("Creating output directory, '{}'".format(output_folder))
         os.makedirs(output_folder)
 
     import cropper
