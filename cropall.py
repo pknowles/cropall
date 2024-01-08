@@ -23,17 +23,21 @@ import error_handler
 import argparse
 import configparser
 import pathlib
+import shutil
 
 logger = error_handler.activate("cropall")
 
+default_config_file = pathlib.Path("cropall_default.ini")
 config_file = pathlib.Path("cropall.ini")
 
 # config is in a subdirectory when packaged with pyinstaller
 if hasattr(sys, "_MEIPASS"):
-    config_file = pathlib.Path(sys._MEIPASS) / config_file
+    internal_dir = pathlib.Path(sys._MEIPASS)
+    default_config_file = internal_dir / pathlib.Path("cropall_default.ini")
+    config_file = internal_dir / config_file
 
     # Add the _internal directory to PATH for wand/imagemagick on windows
-    imagemagick_dir = str(pathlib.Path(sys._MEIPASS))
+    imagemagick_dir = str(internal_dir)
     os.environ["MAGICK_HOME"] = imagemagick_dir
     os.environ["MAGICK_CODER_FILTER_PATH"] = os.path.join(
         imagemagick_dir, "modules/filters"
@@ -43,6 +47,10 @@ if hasattr(sys, "_MEIPASS"):
     )
     if sys.platform == "win32":
         os.environ["PATH"] += os.pathsep + sys._MEIPASS
+
+# use the default config if this is the first run
+if not os.path.exists(config_file) and os.path.exists(default_config_file):
+    shutil.copy(default_config_file, config_file)
 
 config = configparser.ConfigParser()
 config.read(config_file)
@@ -72,6 +80,7 @@ def getImages(config, dir):
 
 if __name__ == "__main__":
     cropall_config = config["cropall"]
+    cropall_config["first_run"] = "False"
     args = parser.parse_args()
     if args.input_folder:
         input_folder = str(args.input_folder)
@@ -103,5 +112,5 @@ if __name__ == "__main__":
     app = gui.App(config, cropper, input_folder, images, output_folder)
     app.mainloop()
 
-    with open(config_file, 'w') as filehandle:
+    with open(config_file, "w") as filehandle:
         config.write(filehandle)

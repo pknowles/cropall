@@ -67,7 +67,7 @@ a = Analysis(
     ['cropall.py'],
     pathex=[],
     binaries=libraries,
-    datas=[('cropall.ini', '.')] + licenses,
+    datas=[('cropall.ini', '.'), ('cropall_default.ini', '.')] + licenses,
     hiddenimports=['PIL._tkinter_finder'],
     hookspath=[],
     hooksconfig={},
