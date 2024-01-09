@@ -30,23 +30,22 @@ logger = error_handler.activate("cropall")
 default_config_file = pathlib.Path("cropall_default.ini")
 config_file = pathlib.Path("cropall.ini")
 
-# config is in a subdirectory when packaged with pyinstaller
+# dependencies are in a subdirectory when packaged with pyinstaller
 if hasattr(sys, "_MEIPASS"):
     internal_dir = pathlib.Path(sys._MEIPASS)
     default_config_file = internal_dir / pathlib.Path("cropall_default.ini")
     config_file = internal_dir / config_file
 
-    # Add the _internal directory to PATH for wand/imagemagick on windows
-    imagemagick_dir = str(internal_dir)
-    os.environ["MAGICK_HOME"] = imagemagick_dir
-    os.environ["MAGICK_CODER_FILTER_PATH"] = os.path.join(
-        imagemagick_dir, "modules/filters"
-    )
-    os.environ["MAGICK_CODER_MODULE_PATH"] = os.path.join(
-        imagemagick_dir, "modules/coders"
-    )
+    # ImageMagick directories
+    os.environ["MAGICK_HOME"] = str(internal_dir)
+    os.environ["MAGICK_CODER_FILTER_PATH"] = str(internal_dir / "modules/filters")
+    os.environ["MAGICK_CODER_MODULE_PATH"] = str(internal_dir / "modules/coders")
+
+    # Add the above paths PATH for wand/imagemagick on windows
     if sys.platform == "win32":
-        os.environ["PATH"] += os.pathsep + sys._MEIPASS
+        os.environ["PATH"] += os.pathsep + os.environ["MAGICK_HOME"]
+        os.environ["PATH"] += os.pathsep + os.environ["MAGICK_CODER_FILTER_PATH"]
+        os.environ["PATH"] += os.pathsep + os.environ["MAGICK_CODER_MODULE_PATH"]
 
 config = configparser.ConfigParser()
 config.read(default_config_file)
@@ -84,6 +83,7 @@ if __name__ == "__main__":
     else:
         # Ask for the input directory
         import tkinter.filedialog
+
         input_folder = tkinter.filedialog.askdirectory(
             initialdir=cropall_config["input_folder"], title="Please select a directory"
         )
